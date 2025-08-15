@@ -1,48 +1,29 @@
 // src/clients/PacemanClient.ts
 import axios, { AxiosInstance } from 'axios';
+import { type Logger as PinoLogger } from 'pino';
 import {
   Session,
   sessionSchema,
-  RecentRun,
   recentRunSchema,
   Run,
   runSchema,
+  NPH,
+  nphSchema,
+  RecentRuns,
 } from '../types/paceman';
+import { Service } from '../types/app';
 
 export class PacemanClient {
   private api: AxiosInstance;
+  private logger: PinoLogger;
 
-  constructor(baseURL: string) {
+  constructor(baseURL: string, logger: PinoLogger) {
     this.api = axios.create({ baseURL });
-  }
-
-  async getSessionStats(name: string): Promise<Session> {
-    const { data } = await this.api.get('/getSessionStats', {
-      params: {
-        name,
-      },
-    });
-    const parsedData = sessionSchema.parse(data);
-    if (!parsedData) throw new Error('Invalid response from getSessionStats');
-
-    return parsedData;
-  }
-
-  async getRecentRun(name: string): Promise<RecentRun> {
-    const { data } = await this.api.get('/getRecentRuns', {
-      params: {
-        name,
-        limit: 1,
-      },
-    });
-
-    const parsedData = recentRunSchema.parse(data);
-    if (!parsedData) throw new Error('Invalid response from getSessionStats');
-
-    return parsedData;
+    this.logger = logger.child({ Service: Service.PACEMAN });
   }
 
   async getWorld(id: number): Promise<Run> {
+    this.logger.debug(`Handling /getWorld ${id}`);
     const { data } = await this.api.get('/getWorld', {
       params: {
         worldId: id,
@@ -50,7 +31,78 @@ export class PacemanClient {
     });
 
     const parsedData = runSchema.parse(data);
-    if (!parsedData) throw new Error('Invalid response from getSessionStats');
+    if (!parsedData) {
+      this.logger.error('Invalid response from getWorld', data);
+      throw new Error('Invalid response from getWorld');
+    }
+
+    return parsedData;
+  }
+
+  async getPB(name: string): Promise<void> {}
+
+  async getSessionStats(
+    name: string,
+    hours?: number,
+    hoursBetween?: number,
+  ): Promise<Session> {
+    this.logger.debug(`Handling /getSessionStats ${name}`);
+    const params: Record<string, string | number> = { name };
+
+    // Let paceman handle defaults if none specified
+    if (hours !== undefined) params.hours = hours;
+    if (hoursBetween !== undefined) params.hoursBetween = hoursBetween;
+
+    const { data } = await this.api.get('/getSessionStats', { params });
+    const parsedData = sessionSchema.parse(data);
+    if (!parsedData) {
+      this.logger.error('Invalid response from getSessionStats', data);
+      throw new Error('Invalid response from getSessionStats');
+    }
+
+    return parsedData;
+  }
+
+  async getRecentRuns(name: string, limit?: number): Promise<RecentRuns> {
+    this.logger.debug(`Handling /getRecentRuns ${name}`);
+
+    const params: Record<string, string | number> = { name };
+    if (limit !== undefined) params.limit = limit;
+    else params.limit = 1;
+
+    const { data } = await this.api.get('/getRecentRuns', { params });
+
+    const parsedData = recentRunSchema.parse(data);
+    if (!parsedData) {
+      this.logger.error('Invalid response from getRecentRuns', data);
+      throw new Error('Invalid response from getRecentRuns');
+    }
+
+    return parsedData;
+  }
+
+  async getNPH(
+    name: string,
+    hours?: number,
+    hoursBetween?: number,
+  ): Promise<NPH> {
+    this.logger.debug(`Handling /getNPH ${name}`);
+    const params: Record<string, string | number> = { name };
+
+    // Let paceman handle defaults if none specified
+    if (hours !== undefined) params.hours = hours;
+    if (hoursBetween !== undefined) params.hoursBetween = hoursBetween;
+
+    const { data } = await this.api.get('/getNPH', {
+      params: {
+        name,
+      },
+    });
+    const parsedData = nphSchema.parse(data);
+    if (!parsedData) {
+      this.logger.error('Invalid response from getNPH', data);
+      throw new Error('Invalid response from getNPH');
+    }
 
     return parsedData;
   }

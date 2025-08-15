@@ -1,4 +1,19 @@
-import { z } from "zod";
+import { z } from 'zod';
+
+export enum Timeframe {
+  DAILY = 'daily',
+  WEEKLY = 'weekly',
+  MONTHLY = 'monthly',
+}
+export enum SplitName {
+  NETHER = 'nether',
+  BASTION = 'bastion',
+  FORTRESS = 'fortress',
+  BLIND = 'first_portal',
+  STRONGHOLD = 'stronghold',
+  END = 'end',
+  FINISH = 'finish',
+}
 
 export const runSchema = z.object({
   id: z.number(),
@@ -12,7 +27,7 @@ export const runSchema = z.object({
   finish: z.number().nullable().optional(),
 });
 export const nphSchema = z.object({
-  rtaph: z.number(),
+  rtanph: z.number(),
   rnph: z.number(),
   lnph: z.number(),
   count: z.number(),
@@ -30,8 +45,6 @@ export const sessionItemSchema = z.object({
 });
 export const sessionSchema = z.object({
   nether: sessionItemSchema,
-  bastion: sessionItemSchema,
-  fortress: sessionItemSchema,
   first_structure: sessionItemSchema,
   second_structure: sessionItemSchema,
   first_portal: sessionItemSchema,
@@ -39,14 +52,17 @@ export const sessionSchema = z.object({
   end: sessionItemSchema,
   finish: sessionItemSchema,
 });
-export const recentRunSchema = runSchema.extend({
-  lootBastion: z.number().nullable(),
-  obtainObsidian: z.number().nullable(),
-  obtainCryingObsidian: z.number().nullable(),
-  obtainRod: z.number().nullable(),
-});
+export const recentRunSchema = z.array(
+  runSchema.extend({
+    lootBastion: z.number().nullable(),
+    obtainObsidian: z.number().nullable(),
+    obtainCryingObsidian: z.number().nullable(),
+    obtainRod: z.number().nullable(),
+    time: z.number(),
+  }),
+);
 
 export type Run = z.infer<typeof runSchema>;
-export type RecentRun = z.infer<typeof recentRunSchema>;
+export type RecentRuns = z.infer<typeof recentRunSchema>;
 export type NPH = z.infer<typeof nphSchema>;
 export type Session = z.infer<typeof sessionSchema>;
