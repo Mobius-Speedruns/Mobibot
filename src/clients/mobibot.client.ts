@@ -42,9 +42,9 @@ export class MobibotClient {
 
     // Convert to chat message.
     return (
-      `${name} Session Stats • ` +
+      `${name} Session Stats • (${getRelativeTime((nphData.playtime + nphData.walltime) / 1000)}) ` +
       nethers +
-      splits.join(' • ') +
+      (splits.length > 0 ? ' • ' + splits.join(' • ') : '') +
       ` • https://paceman.gg/stats/player/${name}/`
     );
   }

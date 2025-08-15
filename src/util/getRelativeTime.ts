@@ -16,6 +16,7 @@ export function getRelativeTime(seconds: number): string {
       parts.push(`${amount}${unit.label}`);
       remaining -= amount * unit.value;
     }
+    if (parts.length === 2) break; // up to 2 largest units
   }
 
   // If no units matched, show "0m"
