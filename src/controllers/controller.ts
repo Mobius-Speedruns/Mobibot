@@ -34,8 +34,8 @@ export const lastPace = async (
 ) => {
   try {
     const name = req.query.name as string;
-    const session = await mobibot.lastpace(name);
-    res.json(session);
+    const lastsplit = await mobibot.lastpace(name);
+    res.json(lastsplit);
   } catch (err) {
     pinoLogger.error(err);
     res.status(500).json({ error: 'Paceman API error' });
@@ -59,8 +59,20 @@ export const lastSplit = async (
       });
     }
 
-    const session = await mobibot.lastsplit(name, splitname as SplitName);
-    res.json(session);
+    const lastsplit = await mobibot.lastsplit(name, splitname as SplitName);
+    res.json(lastsplit);
+  } catch (err) {
+    pinoLogger.error(err);
+    res.status(500).json({ error: 'Paceman API error' });
+  }
+};
+
+export const pbs = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const names = req.query.name as string;
+
+    const pbs = await mobibot.pb(names);
+    res.json(pbs);
   } catch (err) {
     pinoLogger.error(err);
     res.status(500).json({ error: 'Paceman API error' });

@@ -61,8 +61,17 @@ export const recentRunSchema = z.array(
     time: z.number(),
   }),
 );
+export const pbSchema = z.array(
+  z.object({
+    name: z.string(),
+    finish: z.number(),
+    timestamp: z.number(),
+    pb: z.string(),
+  }),
+);
 
 export type Run = z.infer<typeof runSchema>;
 export type RecentRuns = z.infer<typeof recentRunSchema>;
 export type NPH = z.infer<typeof nphSchema>;
 export type Session = z.infer<typeof sessionSchema>;
+export type PB = z.infer<typeof pbSchema>;

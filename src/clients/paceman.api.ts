@@ -10,6 +10,8 @@ import {
   NPH,
   nphSchema,
   RecentRuns,
+  pbSchema,
+  PB,
 } from '../types/paceman';
 import { Service } from '../types/app';
 
@@ -39,7 +41,21 @@ export class PacemanClient {
     return parsedData;
   }
 
-  async getPB(name: string): Promise<void> {}
+  async getPBs(names: string): Promise<PB> {
+    this.logger.debug(`Handling /getPBs`);
+
+    const params: Record<string, string | number> = { names };
+
+    const { data } = await this.api.get('/getPBs', { params });
+
+    const parsedData = pbSchema.parse(data);
+    if (!parsedData) {
+      this.logger.error('Invalid response from getRecentRuns', data);
+      throw new Error('Invalid response from getRecentRuns');
+    }
+
+    return parsedData;
+  }
 
   async getSessionStats(
     name: string,

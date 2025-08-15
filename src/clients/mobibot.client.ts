@@ -80,6 +80,16 @@ export class MobibotClient {
       ` • https://paceman.gg/stats/run/${run.id}/`
     );
   }
+  async pb(names: string): Promise<string> {
+    const pbs = await this.paceman.getPBs(names);
+
+    return pbs
+      .map(
+        (pb) =>
+          `${pb.name} • ${pb.pb} (${getRelativeTimeFromTimestamp(pb.timestamp)} ago)`,
+      )
+      .join(' ');
+  }
   async resets(name: string): Promise<void> {}
   async elo(name: string): Promise<void> {}
   async lastmatch(name: string): Promise<void> {}
