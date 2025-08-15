@@ -78,3 +78,23 @@ export const pbs = async (req: Request, res: Response, next: NextFunction) => {
     res.status(500).json({ error: 'Paceman API error' });
   }
 };
+
+export const resets = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const name = req.query.name as string;
+    const hours = req.query.hours ? Number(req.query.hours) : undefined;
+    const hoursBetween = req.query.hoursBetween
+      ? Number(req.query.hoursBetween)
+      : undefined;
+
+    const resets = await mobibot.resets(name, hours, hoursBetween);
+    res.json(resets);
+  } catch (err) {
+    pinoLogger.error(err);
+    res.status(500).json({ error: 'Paceman API error' });
+  }
+};

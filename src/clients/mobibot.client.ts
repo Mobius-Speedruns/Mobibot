@@ -90,7 +90,15 @@ export class MobibotClient {
       )
       .join(' ');
   }
-  async resets(name: string): Promise<void> {}
+  async resets(
+    name: string,
+    hours?: number,
+    hoursBetween?: number,
+  ): Promise<string> {
+    const resetData = await this.paceman.getNPH(name, hours, hoursBetween);
+
+    return `${name} Reset Stats • ${resetData.totalResets} total resets • ${resetData.resets} last session`;
+  }
   async elo(name: string): Promise<void> {}
   async lastmatch(name: string): Promise<void> {}
   async leaderboard(timeframe: Timeframe): Promise<void> {}
