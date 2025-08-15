@@ -1,0 +1,36 @@
+{
+  "name": "mobibot",
+  "version": "1.0.0",
+  "description": "Twitch Bot for fetching MCSR stats",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "nodemon --watch src --ext ts --exec npx ts-node src/server.ts",
+    "lint": "eslint \"src/**/*.ts\""
+  },
+  "author": "Mobius Speedruns",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.11.0",
+    "eslint-plugin-prettier": "^5.5.4",
+    "zod": "^4.0.17"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.33.0",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.2.1",
+    "dotenv": "^17.2.1",
+    "eslint": "^9.33.0",
+    "express": "^5.1.0",
+    "globals": "^16.3.0",
+    "install": "^0.13.0",
+    "jiti": "^2.5.1",
+    "nodemon": "^3.1.10",
+    "npm": "^11.5.2",
+    "prettier": "^3.6.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.39.1"
+  }
+}
