@@ -9,6 +9,7 @@ import {
 import { msToTime } from '../util/msToTime';
 import { RankedClient } from './ranked.api';
 import { handleNotFound } from '../util/handleNotFound';
+import { appendInvisibleChar } from '../util/appendInvisibleChar';
 
 export class MobibotClient {
   private paceman: PacemanClient;
@@ -55,10 +56,10 @@ export class MobibotClient {
 
     // Return message for missing session
     if (sessionData.nether.count === 0)
-      return `${name} hasn't played in the specified timeframe!`;
+      return `${appendInvisibleChar(name)} hasn't played in the specified timeframe!`;
 
     return (
-      `${name} Session Stats • (${getRelativeTime((nphData.playtime + nphData.walltime) / 1000)}) ` +
+      `${appendInvisibleChar(name)} Session Stats • (${getRelativeTime((nphData.playtime + nphData.walltime) / 1000)}) ` +
       nethers +
       (splits.length > 0 ? ' • ' + splits.join(' • ') : '') +
       ` • https://paceman.gg/stats/player/${name}/`
@@ -73,7 +74,7 @@ export class MobibotClient {
     // Filter runs for specified splits
     const relevantRuns = last100Runs.filter((run) => run[splitname] !== null);
     if (relevantRuns.length === 0)
-      return `${name} hasn't reached the ${splitname} in the last 100 runs.`;
+      return `${appendInvisibleChar(name)} hasn't reached the ${splitname} in the last 100 runs.`;
 
     // Use most recent pace. Assume order is most recent first.
     const run = relevantRuns[0];
@@ -90,7 +91,7 @@ export class MobibotClient {
       .map(([key, value]) => `${key}: ${msToTime(value as number)}`);
 
     return (
-      `Lastest ${name} Pace: (${relativeTime} ago • ${relativeNethers + 1} nethers ago) ` +
+      `Lastest ${appendInvisibleChar(name)} Pace: (${relativeTime} ago • ${relativeNethers + 1} nethers ago) ` +
       splits.join(' • ') +
       ` • https://paceman.gg/stats/run/${run.id}/`
     );
@@ -100,7 +101,7 @@ export class MobibotClient {
     return pbs
       .map(
         (pb) =>
-          `${pb.name} • ${pb.pb} (${getRelativeTimeFromTimestamp(pb.timestamp)} ago)`,
+          `${appendInvisibleChar(pb.name)} • ${pb.pb} (${getRelativeTimeFromTimestamp(pb.timestamp)} ago)`,
       )
       .join(' ');
   }
@@ -111,7 +112,7 @@ export class MobibotClient {
   ): Promise<string> {
     const resetData = await this.paceman.getNPH(name, hours, hoursBetween);
 
-    return `${name} Reset Stats • ${resetData.totalResets} total resets • ${resetData.resets} last session`;
+    return `${appendInvisibleChar(name)} Reset Stats • ${resetData.totalResets} total resets • ${resetData.resets} last session`;
   }
   async elo(name: string): Promise<string> {
     const userData = await this.ranked.getUserData(name);
@@ -130,7 +131,7 @@ export class MobibotClient {
     const completionAvg = totalCompletionTime / totalCompletions;
 
     return (
-      `${name} Elo: ${elo || 'unknown'} ` +
+      `${appendInvisibleChar(name)} Elo: ${elo || 'unknown'} ` +
       `(${data.seasonResult.highest} Peak) • ` +
       `${elo ? this.ranked.convertToRank(elo) : 'unknown'} (#${data.eloRank}) • ` +
       `W/L ${wins}/${losses} (${winrate.toFixed(1)}%) • ` +
@@ -158,13 +159,13 @@ export class MobibotClient {
 
     return (
       `Ranked Match Stats (${getRelativeTimeFromTimestamp(mostRecentMatch.date)} ago) • ` +
-      `#${player1.eloRank} ${player1.nickname} (${player1.eloRate}) VS #${player2.eloRank} ${player2.nickname} (${player2.eloRate}) • ` +
+      `#${player1.eloRank} ${appendInvisibleChar(player1.nickname)} (${player1.eloRate}) VS #${player2.eloRank} ${appendInvisibleChar(player2.nickname)} (${player2.eloRate}) • ` +
       `Winner: ${winner?.nickname} ` +
       (mostRecentMatch.forfeited
         ? `(Forfeit at ${msToTime(mostRecentMatch.result.time)})`
         : `(${msToTime(mostRecentMatch.result.time)})`) +
       ` • ` +
-      `Elo Change: ${player1.nickname} ${player1Changes?.change} → ${player1Changes?.eloRate} | ${player2.nickname} ${player2Changes?.change} → ${player2Changes?.eloRate} • ` +
+      `Elo Change: ${appendInvisibleChar(player1.nickname)} ${player1Changes?.change} → ${player1Changes?.eloRate} | ${appendInvisibleChar(player2.nickname)} ${player2Changes?.change} → ${player2Changes?.eloRate} • ` +
       `Seed Type: ${mostRecentMatch.seed?.overworld} -> ${mostRecentMatch.seed?.nether} • ` +
       `https://mcsrranked.com/stats/${player1.nickname}/${mostRecentMatch.id}`
     );
