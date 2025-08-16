@@ -11,22 +11,33 @@ export const UserProfileSchema = z.object({
   uuid: z.string(),
   nickname: z.string(),
   eloRate: z.number().nullable().optional(),
-  eloRank: z.number().optional(),
-  country: z.string().optional(),
+  eloRank: z.number().nullable().optional(),
+  country: z.string().nullable().optional(),
 });
 export const MatchSeedSchema = z.object({
   id: z.string(),
   overworld: z.string().optional().nullable(),
-  bastion: z.string().optional().nullable(),
+  nether: z.string().optional().nullable(),
 });
 export const MatchSchema = z.object({
-  id: z.string(),
+  id: z.number(),
   type: z.enum(MatchType),
   season: z.number(),
   date: z.number(), // in seconds
   players: z.array(UserProfileSchema),
   seed: MatchSeedSchema.optional(),
-  result: z.object({ uuid: z.string().optional().nullable() }),
+  forfeited: z.boolean(),
+  result: z.object({
+    uuid: z.string().optional().nullable(),
+    time: z.number(),
+  }),
+  changes: z.array(
+    z.object({
+      uuid: z.string(),
+      change: z.number(),
+      eloRate: z.number(),
+    }),
+  ),
 });
 export const SeasonResultSchema = z.object({
   last: z.object({
@@ -90,7 +101,12 @@ export const GetUserDataResponseSchema = z.object({
     statistics: StatisticsSchema,
   }),
 });
+export const MatchesResponseSchema = z.object({
+  status: z.string(),
+  data: z.array(MatchSchema),
+});
 
 export type UserProfile = z.infer<typeof UserProfileSchema>;
 export type Match = z.infer<typeof MatchSchema>;
 export type GetUserDataResponse = z.infer<typeof GetUserDataResponseSchema>;
+export type MatchesResponse = z.infer<typeof MatchesResponseSchema>;

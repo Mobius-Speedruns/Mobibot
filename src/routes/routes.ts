@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   elo,
   getSession,
+  lastmatch,
   lastPace,
   lastSplit,
   pbs,
@@ -16,5 +17,6 @@ router.get('/lastsplit', lastSplit);
 router.get('/pb', pbs);
 router.get('/resets', resets);
 router.get('/elo', elo);
+router.get('/lastmatch', lastmatch);
 
 export default router;

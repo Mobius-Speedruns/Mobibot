@@ -112,3 +112,19 @@ export const elo = async (req: Request, res: Response, next: NextFunction) => {
     res.status(500).json({ error: 'Paceman API error' });
   }
 };
+
+export const lastmatch = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const name = req.query.name as string;
+
+    const match = await mobibot.lastmatch(name);
+    res.json(match);
+  } catch (err) {
+    pinoLogger.error(err);
+    res.status(500).json({ error: 'Paceman API error' });
+  }
+};

@@ -4,6 +4,8 @@ import { Service } from '../types/app';
 import {
   GetUserDataResponse,
   GetUserDataResponseSchema,
+  MatchesResponse,
+  MatchesResponseSchema,
 } from '../types/ranked';
 
 export class RankedClient {
@@ -64,6 +66,18 @@ export class RankedClient {
     const parsedData = GetUserDataResponseSchema.parse(data);
     if (!parsedData) {
       this.logger.error('Invalid response from getUserData', data);
+      throw new Error('Invalid response from getUserData');
+    }
+
+    return parsedData;
+  }
+
+  async getRecentMatches(name: string): Promise<MatchesResponse> {
+    const { data } = await this.api.get(`/users/${name}/matches`);
+
+    const parsedData = MatchesResponseSchema.parse(data);
+    if (!parsedData) {
+      this.logger.error('Invalid response from getRecentMatches', data);
       throw new Error('Invalid response from getUserData');
     }
 

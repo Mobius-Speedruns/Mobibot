@@ -130,6 +130,35 @@ export class MobibotClient {
       `${forfeitrate.toFixed(1)}% FF Rate`
     );
   }
-  async lastmatch(name: string): Promise<void> {}
+  async lastmatch(name: string): Promise<string> {
+    const matchData = await this.ranked.getRecentMatches(name);
+    const mostRecentMatch = matchData.data[0];
+    const winner = mostRecentMatch.players.find(
+      (player) => player.uuid === mostRecentMatch.result.uuid,
+    );
+    const player1 = mostRecentMatch.players[0];
+    const player2 = mostRecentMatch.players[1];
+
+    // Find relevant changes
+    const player1Changes = mostRecentMatch.changes.find(
+      (player) => player.uuid === player1.uuid,
+    );
+    const player2Changes = mostRecentMatch.changes.find(
+      (player) => player.uuid === player2.uuid,
+    );
+
+    return (
+      `Ranked Match Stats (${getRelativeTimeFromTimestamp(mostRecentMatch.date)} ago) • ` +
+      `#${player1.eloRank} ${player1.nickname} (${player1.eloRate}) VS #${player2.eloRank} ${player2.nickname} (${player2.eloRate}) • ` +
+      `Winner: ${winner?.nickname} ` +
+      (mostRecentMatch.forfeited
+        ? `(Forfeit at ${msToTime(mostRecentMatch.result.time)})`
+        : `(${msToTime(mostRecentMatch.result.time)})`) +
+      ` • ` +
+      `Elo Change: ${player1.nickname} ${player1Changes?.change} → ${player1Changes?.eloRate} | ${player2.nickname} ${player2Changes?.change} → ${player2Changes?.eloRate} • ` +
+      `Seed Type: ${mostRecentMatch.seed?.overworld} -> ${mostRecentMatch.seed?.nether} • ` +
+      `https://mcsrranked.com/stats/${player1.nickname}/${mostRecentMatch.id}`
+    );
+  }
   async leaderboard(timeframe: Timeframe): Promise<void> {}
 }
