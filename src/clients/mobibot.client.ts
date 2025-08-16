@@ -7,13 +7,20 @@ import {
   getRelativeTimeFromTimestamp,
 } from '../util/getRelativeTime';
 import { msToTime } from '../util/msToTime';
+import { RankedClient } from './ranked.api';
 
 export class MobibotClient {
   private paceman: PacemanClient;
+  private ranked: RankedClient;
   private logger: PinoLogger;
 
-  constructor(paceman: PacemanClient, logger: PinoLogger) {
+  constructor(
+    paceman: PacemanClient,
+    ranked: RankedClient,
+    logger: PinoLogger,
+  ) {
     this.paceman = paceman;
+    this.ranked = ranked;
     this.logger = logger.child({ Service: Service.MOBIBOT });
   }
 
@@ -40,7 +47,6 @@ export class MobibotClient {
     if (sessionData.nether.count === 0)
       return `${name} hasn't played in the specified timeframe!`;
 
-    // Convert to chat message.
     return (
       `${name} Session Stats • (${getRelativeTime((nphData.playtime + nphData.walltime) / 1000)}) ` +
       nethers +
@@ -73,7 +79,6 @@ export class MobibotClient {
       // Convert splits into min:sec
       .map(([key, value]) => `${key}: ${msToTime(value as number)}`);
 
-    // Convert to chat message.
     return (
       `Lastest ${name} Pace: (${relativeTime} ago • ${relativeNethers + 1} nethers ago) ` +
       splits.join(' • ') +
@@ -99,7 +104,32 @@ export class MobibotClient {
 
     return `${name} Reset Stats • ${resetData.totalResets} total resets • ${resetData.resets} last session`;
   }
-  async elo(name: string): Promise<void> {}
+  async elo(name: string): Promise<string> {
+    const userData = await this.ranked.getUserData(name);
+    const data = userData.data;
+    // Statistics
+    const elo = data.eloRate;
+    const totalMatchs = data.statistics.season.playedMatches.ranked;
+    const wins = data.statistics.season.wins.ranked;
+    const losses = data.statistics.season.loses.ranked;
+    const winrate = (wins / (wins + losses)) * 100;
+    const pb = data.statistics.season.bestTime.ranked;
+    const forfeits = data.statistics.season.forfeits.ranked;
+    const forfeitrate = (forfeits / totalMatchs) * 100;
+    const totalCompletions = data.statistics.season.completions.ranked;
+    const totalCompletionTime = data.statistics.season.completionTime.ranked;
+    const completionAvg = totalCompletionTime / totalCompletions;
+
+    return (
+      `${name} Elo: ${elo || 'unknown'} ` +
+      `(${data.seasonResult.highest} Peak) • ` +
+      `${elo ? this.ranked.convertToRank(elo) : 'unknown'} (#${data.eloRank}) • ` +
+      `W/L ${wins}/${losses} (${winrate.toFixed(1)}%) • ` +
+      `${totalMatchs} Matches • ` +
+      `${pb ? msToTime(pb) : 'unknown'} PB (${completionAvg ? msToTime(completionAvg) + ' avg' : 'unknown'}) • ` +
+      `${forfeitrate.toFixed(1)}% FF Rate`
+    );
+  }
   async lastmatch(name: string): Promise<void> {}
   async leaderboard(timeframe: Timeframe): Promise<void> {}
 }

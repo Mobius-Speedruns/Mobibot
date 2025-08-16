@@ -3,9 +3,11 @@ import { PacemanClient } from '../clients/paceman.api';
 import { pinoLogger } from '../clients/logger.client';
 import { MobibotClient } from '../clients/mobibot.client';
 import { SplitName } from '../types/paceman';
+import { RankedClient } from '../clients/ranked.api';
 
 const paceman = new PacemanClient('https://paceman.gg/stats/api', pinoLogger);
-const mobibot = new MobibotClient(paceman, pinoLogger);
+const ranked = new RankedClient('https://api.mcsrranked.com', pinoLogger);
+const mobibot = new MobibotClient(paceman, ranked, pinoLogger);
 
 export const getSession = async (
   req: Request,
@@ -93,6 +95,18 @@ export const resets = async (
 
     const resets = await mobibot.resets(name, hours, hoursBetween);
     res.json(resets);
+  } catch (err) {
+    pinoLogger.error(err);
+    res.status(500).json({ error: 'Paceman API error' });
+  }
+};
+
+export const elo = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const name = req.query.name as string;
+
+    const elo = await mobibot.elo(name);
+    res.json(elo);
   } catch (err) {
     pinoLogger.error(err);
     res.status(500).json({ error: 'Paceman API error' });
