@@ -8,6 +8,7 @@ import {
 } from '../util/getRelativeTime';
 import { msToTime } from '../util/msToTime';
 import { RankedClient } from './ranked.api';
+import { handleNotFound } from '../util/handleNotFound';
 
 export class MobibotClient {
   private paceman: PacemanClient;
@@ -22,6 +23,15 @@ export class MobibotClient {
     this.paceman = paceman;
     this.ranked = ranked;
     this.logger = logger.child({ Service: Service.MOBIBOT });
+
+    // Error handling.
+    this.session = handleNotFound(this.session);
+    this.lastpace = handleNotFound(this.lastpace);
+    this.lastsplit = handleNotFound(this.lastsplit);
+    this.pb = handleNotFound(this.pb);
+    this.resets = handleNotFound(this.resets);
+    this.elo = handleNotFound(this.elo);
+    this.lastmatch = handleNotFound(this.lastmatch);
   }
 
   async session(
@@ -87,7 +97,6 @@ export class MobibotClient {
   }
   async pb(names: string): Promise<string> {
     const pbs = await this.paceman.getPBs(names);
-
     return pbs
       .map(
         (pb) =>

@@ -22,6 +22,17 @@ export class PacemanClient {
   constructor(baseURL: string, logger: PinoLogger) {
     this.api = axios.create({ baseURL });
     this.logger = logger.child({ Service: Service.PACEMAN });
+
+    // Intercept player not found errors
+    this.api.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response && error.response.status === 404) {
+          throw new Error('Player not found.');
+        }
+        throw error;
+      },
+    );
   }
 
   async getWorld(id: number): Promise<Run> {

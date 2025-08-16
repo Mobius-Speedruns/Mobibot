@@ -6,6 +6,7 @@ import {
   GetUserDataResponseSchema,
   MatchesResponse,
   MatchesResponseSchema,
+  PLAYER_NOT_FOUND_MESSAGES,
 } from '../types/ranked';
 
 export class RankedClient {
@@ -15,6 +16,28 @@ export class RankedClient {
   constructor(baseURL: string, logger: PinoLogger) {
     this.api = axios.create({ baseURL });
     this.logger = logger.child({ Service: Service.RANKED });
+
+    // Intercept player not found errors
+    this.api.interceptors.response.use(
+      (response) => {
+        this.logger.debug(response);
+
+        return response;
+      },
+      (error) => {
+        this.logger.error(error.response.data);
+
+        if (
+          error.response &&
+          error.response.status === 400 &&
+          typeof error.response.data === 'object' &&
+          PLAYER_NOT_FOUND_MESSAGES.includes(error.response.data?.data)
+        ) {
+          throw new Error('Player not found.');
+        }
+        throw error;
+      },
+    );
   }
 
   convertToRank(elo: number): string {
@@ -74,7 +97,6 @@ export class RankedClient {
 
   async getRecentMatches(name: string): Promise<MatchesResponse> {
     const { data } = await this.api.get(`/users/${name}/matches`);
-
     const parsedData = MatchesResponseSchema.parse(data);
     if (!parsedData) {
       this.logger.error('Invalid response from getRecentMatches', data);

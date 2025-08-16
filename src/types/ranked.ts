@@ -7,6 +7,11 @@ export enum MatchType {
   'Event Mode Match',
 }
 
+export const PLAYER_NOT_FOUND_MESSAGES = [
+  'User is not exists.',
+  'This player is not exist.',
+];
+
 export const UserProfileSchema = z.object({
   uuid: z.string(),
   nickname: z.string(),
