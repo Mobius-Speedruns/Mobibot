@@ -106,12 +106,14 @@ export class MobibotClient {
   }
   async pb(names: string): Promise<string> {
     const pbs = await this.paceman.getPBs(names);
-    return pbs
+    const response = pbs
       .map(
         (pb) =>
           `${appendInvisibleChars(pb.name)} \u2756 ${pb.pb} (${getRelativeTimeFromTimestamp(pb.timestamp)} ago)`,
       )
       .join(' ');
+    if (!response) return 'No pb found, or player not found!';
+    return response;
   }
   async resets(
     name: string,
@@ -238,11 +240,12 @@ export class MobibotClient {
       `${appendInvisibleChars(name)} Elo`,
       `Elo: ${elo || 'unknown'} (${eloChange > 0 ? '+' : ''}${eloChange}) (#${data.eloRank})`,
       `W/D/L: ${wins}/${draws}/${losses} (${winrate.toFixed(1)}%) \u2756 Matches: ${totalMatches}`,
-      `${completionAvg ? msToTime(completionAvg) : 'unknown'} avgerage`,
+      `${completionAvg ? msToTime(completionAvg) : 'unknown'} average`,
       `FF Rate: ${forfeitrate.toFixed(1)}%`,
     ].filter(Boolean); // remove empty sections
 
     return sections.join(' \u2756 ');
   }
+  // TODO: record/vs command.
   async leaderboard(timeframe: Timeframe): Promise<void> {}
 }

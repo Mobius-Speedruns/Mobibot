@@ -98,7 +98,7 @@ export class TwitchClient extends EventEmitter {
       this.logger.error('Failed to subscribe:', response.data);
     } else {
       this.logger.info(
-        `Subscribed to channel.chat.message for broadcaster ${broadcasterUserId}`,
+        `Subscribed to channel.chat.message for broadcaster ${channelName}`,
       );
     }
   }

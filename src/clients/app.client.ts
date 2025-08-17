@@ -273,12 +273,12 @@ export class AppClient {
     const lower = message.toLowerCase();
 
     // Subscription / link commands
-    if (lower.startsWith('!subscribe'))
-      return this.subscribe(username, channel, message);
-    if (lower.startsWith('!unsubscribe'))
-      return this.unsubscribe(username, channel);
-    if (lower.startsWith('!link')) return this.link(username, channel, message);
-    if (lower.startsWith('!unlink')) return this.unlink(username, channel);
+    // if (lower.startsWith('!subscribe'))
+    //   return this.subscribe(username, channel, message);
+    // if (lower.startsWith('!unsubscribe'))
+    //   return this.unsubscribe(username, channel);
+    // if (lower.startsWith('!link')) return this.link(username, channel, message);
+    // if (lower.startsWith('!unlink')) return this.unlink(username, channel);
 
     // Don't process if it is not a valid mobibot command.
     const parts = message.slice(1).trim().split(/\s+/);
