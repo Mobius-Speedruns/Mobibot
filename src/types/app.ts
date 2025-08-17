@@ -32,4 +32,5 @@ export enum BotCommand {
   DOCUMENTATION = 'documentation',
   HELP = 'help',
   COMMANDS = 'commands',
+  TODAY = 'today',
 }

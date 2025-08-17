@@ -10,6 +10,7 @@ import { msToTime } from '../util/msToTime';
 import { RankedClient } from './ranked.api';
 import { handleNotFound } from '../util/handleNotFound';
 import { appendInvisibleChars } from '../util/appendInvisibleChars';
+import { isTodayUTC } from '../util/isTodayUTC';
 
 export class MobibotClient {
   private paceman: PacemanClient;
@@ -169,15 +170,77 @@ export class MobibotClient {
 
     const sections = [
       `Players: #${player1.eloRank} ${appendInvisibleChars(player1.nickname)} (${player1.eloRate}) VS #${player2.eloRank} ${appendInvisibleChars(player2.nickname)} (${player2.eloRate})`,
-      `Winner: ${appendInvisibleChars(winner?.nickname || '')} ` +
-        (mostRecentMatch.forfeited
-          ? `(Forfeit at ${msToTime(mostRecentMatch.result.time)})`
-          : `(${msToTime(mostRecentMatch.result.time)})`),
+      `Winner: ${appendInvisibleChars(winner?.nickname || '')} ` + matchTime,
       `Elo Change: ${appendInvisibleChars(player1.nickname)} ${player1Changes?.change && player1Changes.change > 0 ? '+' : ''}${player1Changes?.change} » ${player1Changes?.eloRate} \u2756 ${appendInvisibleChars(player2.nickname)} ${player2Changes?.change && player2Changes.change > 0 ? '+' : ''}${player2Changes?.change} » ${player2Changes?.eloRate}`,
       `Seed Type: ${mostRecentMatch.seed?.overworld} » ${mostRecentMatch.seed?.nether}`,
       `https://mcsrranked.com/stats/${player1.nickname}/${mostRecentMatch.id}`,
       `${getRelativeTimeFromTimestamp(mostRecentMatch.date)} ago`,
     ].filter(Boolean);
+
+    return sections.join(' \u2756 ');
+  }
+  async today(name: string): Promise<string> {
+    const [userData, recentMatches] = await Promise.all([
+      this.ranked.getUserData(name),
+      this.ranked.getRecentMatches(name),
+    ]);
+    const todayMatches = recentMatches.data.filter((match) =>
+      isTodayUTC(match.date),
+    );
+
+    const data = userData.data;
+    // Statistics
+    const elo = data.eloRate;
+    let completions = 0;
+    let wins = 0;
+    let draws = 0;
+    let losses = 0;
+    let totalCompletionTime = 0;
+    let eloChange = 0;
+    let forfeits = 0;
+
+    todayMatches.forEach((match) => {
+      const player = match.players.find(
+        (p) => p.nickname.toLowerCase() === name.toLowerCase(),
+      );
+      if (!player) return;
+
+      const didWin = match.result.uuid === player.uuid;
+      const didDraw = match.result.uuid === null;
+
+      if (didWin) {
+        wins++;
+        if (match.result.time != null) {
+          if (!match.forfeited) {
+            totalCompletionTime += match.result.time;
+            completions++;
+          }
+        }
+      } else if (didDraw) {
+        draws++;
+      } else {
+        if (match.forfeited) forfeits++;
+        losses++;
+      }
+
+      const playerChange = match.changes.find((c) => c.uuid === player.uuid);
+      if (playerChange) {
+        eloChange += playerChange.change;
+      }
+    });
+
+    const totalMatches = todayMatches.length;
+    const winrate = (wins / totalMatches) * 100;
+    const forfeitrate = (forfeits / totalMatches) * 100;
+    const completionAvg = totalCompletionTime / completions;
+
+    const sections = [
+      `${appendInvisibleChars(name)} Elo`,
+      `Elo: ${elo || 'unknown'} (${eloChange > 0 ? '+' : ''}${eloChange}) (#${data.eloRank})`,
+      `W/D/L: ${wins}/${draws}/${losses} (${winrate.toFixed(1)}%) \u2756 Matches: ${totalMatches}`,
+      `${completionAvg ? msToTime(completionAvg) : 'unknown'} avgerage`,
+      `FF Rate: ${forfeitrate.toFixed(1)}%`,
+    ].filter(Boolean); // remove empty sections
 
     return sections.join(' \u2756 ');
   }

@@ -105,4 +105,17 @@ export class RankedClient {
 
     return parsedData;
   }
+
+  async getVersusData(name1: string, name2: string): Promise<MatchesResponse> {
+    const { data } = await this.api.get(
+      `/users/${name1}/versus/${name2}/matches`,
+    );
+    const parsedData = MatchesResponseSchema.parse(data);
+    if (!parsedData) {
+      this.logger.error('Invalid response from getVersusData', data);
+      throw new Error('Invalid response from getVersusData');
+    }
+
+    return parsedData;
+  }
 }

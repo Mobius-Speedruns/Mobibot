@@ -247,6 +247,9 @@ export class AppClient {
       case BotCommand.LASTMATCH:
         response = await this.mobibotClient.lastmatch(mcName);
         break;
+      case BotCommand.TODAY:
+        response = await this.mobibotClient.today(mcName);
+        break;
       default:
         // Do nothing on unknown commands.
         return;
