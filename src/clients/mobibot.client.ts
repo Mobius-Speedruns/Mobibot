@@ -57,14 +57,19 @@ export class MobibotClient {
 
     // Return message for missing session
     if (sessionData.nether.count === 0)
-      return `${appendInvisibleChars(name)} hasn't played in the specified timeframe!`;
+      return `${appendInvisibleChars(name)} hasn't played in the last ${hours} hours!`;
 
-    return (
-      `${appendInvisibleChars(name)} Session Stats • (${getRelativeTime((nphData.playtime + nphData.walltime) / 1000)}, ${getRelativeTimeFromTimestamp(lastRun[0].time)}) ` +
-      nethers +
-      (splits.length > 0 ? ' • ' + splits.join(' • ') : '') +
-      ` • https://paceman.gg/stats/player/${name}/`
-    );
+    const timeInfo = `Playtime: ${getRelativeTime((nphData.playtime + nphData.walltime) / 1000)}, ${getRelativeTimeFromTimestamp(lastRun[0].time)} ago`;
+
+    const sections = [
+      `${appendInvisibleChars(name)} Session`,
+      nethers,
+      splits.length ? splits.join(' \u2756 ') : '',
+      timeInfo,
+      `https://paceman.gg/stats/player/${name}/`,
+    ].filter(Boolean); // remove empty sections
+
+    return sections.join(' \u2756 ');
   }
   async lastpace(name: string): Promise<string> {
     return this.lastsplit(name, SplitName.FORTRESS);
@@ -80,29 +85,30 @@ export class MobibotClient {
     // Use most recent pace. Assume order is most recent first.
     const run = relevantRuns[0];
     const relativeTime = getRelativeTimeFromTimestamp(run.time);
-    const relativeNethers = last100Runs.findIndex((r) => r.id === run.id);
+    const relativeNethers = last100Runs.findIndex((r) => r.id === run.id) + 1;
+
     const splits = Object.entries(run)
-      // Only consider splits from response data
-      .filter(([key, value]) => {
-        return (
-          (Object.values(SplitName) as string[]).includes(key) && value != null
-        );
-      })
-      // Convert splits into min:sec
+      .filter(
+        ([key, value]) =>
+          (Object.values(SplitName) as string[]).includes(key) && value != null,
+      )
       .map(([key, value]) => `${key}: ${msToTime(value as number)}`);
 
-    return (
-      `Lastest ${appendInvisibleChars(name)} Pace: (${relativeTime} ago • ${relativeNethers + 1} nethers ago) ` +
-      splits.join(' • ') +
-      ` • https://paceman.gg/stats/run/${run.id}/`
-    );
+    const sections = [
+      `${appendInvisibleChars(name)} Last ${splitname}`,
+      splits.join(' \u2756 '),
+      `${relativeTime} ago \u2756 ${relativeNethers} nethers ago`,
+      `https://paceman.gg/stats/run/${run.id}/`,
+    ].filter(Boolean); // remove empty sections
+
+    return sections.join(' \u2756 ');
   }
   async pb(names: string): Promise<string> {
     const pbs = await this.paceman.getPBs(names);
     return pbs
       .map(
         (pb) =>
-          `${appendInvisibleChars(pb.name)} • ${pb.pb} (${getRelativeTimeFromTimestamp(pb.timestamp)} ago)`,
+          `${appendInvisibleChars(pb.name)} \u2756 ${pb.pb} (${getRelativeTimeFromTimestamp(pb.timestamp)} ago)`,
       )
       .join(' ');
   }
@@ -113,33 +119,33 @@ export class MobibotClient {
   ): Promise<string> {
     const resetData = await this.paceman.getNPH(name, hours, hoursBetween);
 
-    return `${appendInvisibleChars(name)} Reset Stats • ${resetData.totalResets} total resets • ${resetData.resets} last session`;
+    return `${appendInvisibleChars(name)} Reset Stats \u2756 ${resetData.totalResets} total resets \u2756 ${resetData.resets} last session`;
   }
   async elo(name: string): Promise<string> {
     const userData = await this.ranked.getUserData(name);
     const data = userData.data;
     // Statistics
     const elo = data.eloRate;
-    const totalMatchs = data.statistics.season.playedMatches.ranked;
+    const totalMatches = data.statistics.season.playedMatches.ranked;
     const wins = data.statistics.season.wins.ranked;
     const losses = data.statistics.season.loses.ranked;
     const winrate = (wins / (wins + losses)) * 100;
     const pb = data.statistics.season.bestTime.ranked;
     const forfeits = data.statistics.season.forfeits.ranked;
-    const forfeitrate = (forfeits / totalMatchs) * 100;
+    const forfeitrate = (forfeits / totalMatches) * 100;
     const totalCompletions = data.statistics.season.completions.ranked;
     const totalCompletionTime = data.statistics.season.completionTime.ranked;
     const completionAvg = totalCompletionTime / totalCompletions;
 
-    return (
-      `${appendInvisibleChars(name)} Elo: ${elo || 'unknown'} ` +
-      `(${data.seasonResult.highest} Peak) • ` +
-      `${elo ? this.ranked.convertToRank(elo) : 'unknown'} (#${data.eloRank}) • ` +
-      `W/L ${wins}/${losses} (${winrate.toFixed(1)}%) • ` +
-      `${totalMatchs} Matches • ` +
-      `${pb ? msToTime(pb) : 'unknown'} PB (${completionAvg ? msToTime(completionAvg) + ' avg' : 'unknown'}) • ` +
-      `${forfeitrate.toFixed(1)}% FF Rate`
-    );
+    const sections = [
+      `${appendInvisibleChars(name)} Elo`,
+      `Elo: ${elo || 'unknown'} (Peak: ${data.seasonResult.highest}) \u2756 Rank: ${elo ? this.ranked.convertToRank(elo) : 'unknown'} (#${data.eloRank})`,
+      `W/L: ${wins}/${losses} (${winrate.toFixed(1)}%) \u2756 Matches: ${totalMatches}`,
+      `PB: ${pb ? msToTime(pb) : 'unknown'} \u2756 Avg: ${completionAvg ? msToTime(completionAvg) : 'unknown'}`,
+      `FF Rate: ${forfeitrate.toFixed(1)}%`,
+    ].filter(Boolean); // remove empty sections
+
+    return sections.join(' \u2756 ');
   }
   async lastmatch(name: string): Promise<string> {
     const matchData = await this.ranked.getRecentMatches(name);
@@ -147,29 +153,33 @@ export class MobibotClient {
     const winner = mostRecentMatch.players.find(
       (player) => player.uuid === mostRecentMatch.result.uuid,
     );
-    const player1 = mostRecentMatch.players[0];
-    const player2 = mostRecentMatch.players[1];
+    const [player1, player2] = mostRecentMatch.players;
 
     // Find relevant changes
     const player1Changes = mostRecentMatch.changes.find(
-      (player) => player.uuid === player1.uuid,
+      (p) => p.uuid === player1.uuid,
     );
     const player2Changes = mostRecentMatch.changes.find(
-      (player) => player.uuid === player2.uuid,
+      (p) => p.uuid === player2.uuid,
     );
 
-    return (
-      `Ranked Match Stats (${getRelativeTimeFromTimestamp(mostRecentMatch.date)} ago) • ` +
-      `#${player1.eloRank} ${appendInvisibleChars(player1.nickname)} (${player1.eloRate}) VS #${player2.eloRank} ${appendInvisibleChars(player2.nickname)} (${player2.eloRate}) • ` +
-      `Winner: ${winner?.nickname} ` +
-      (mostRecentMatch.forfeited
-        ? `(Forfeit at ${msToTime(mostRecentMatch.result.time)})`
-        : `(${msToTime(mostRecentMatch.result.time)})`) +
-      ` • ` +
-      `Elo Change: ${appendInvisibleChars(player1.nickname)} ${player1Changes?.change} → ${player1Changes?.eloRate} | ${appendInvisibleChars(player2.nickname)} ${player2Changes?.change} → ${player2Changes?.eloRate} • ` +
-      `Seed Type: ${mostRecentMatch.seed?.overworld} -> ${mostRecentMatch.seed?.nether} • ` +
-      `https://mcsrranked.com/stats/${player1.nickname}/${mostRecentMatch.id}`
-    );
+    const matchTime = mostRecentMatch.forfeited
+      ? `(Forfeit at ${msToTime(mostRecentMatch.result.time)})`
+      : `(${msToTime(mostRecentMatch.result.time)})`;
+
+    const sections = [
+      `Players: #${player1.eloRank} ${appendInvisibleChars(player1.nickname)} (${player1.eloRate}) VS #${player2.eloRank} ${appendInvisibleChars(player2.nickname)} (${player2.eloRate})`,
+      `Winner: ${appendInvisibleChars(winner?.nickname || '')} ` +
+        (mostRecentMatch.forfeited
+          ? `(Forfeit at ${msToTime(mostRecentMatch.result.time)})`
+          : `(${msToTime(mostRecentMatch.result.time)})`),
+      `Elo Change: ${appendInvisibleChars(player1.nickname)} ${player1Changes?.change && player1Changes.change > 0 ? '+' : ''}${player1Changes?.change} » ${player1Changes?.eloRate} \u2756 ${appendInvisibleChars(player2.nickname)} ${player2Changes?.change && player2Changes.change > 0 ? '+' : ''}${player2Changes?.change} » ${player2Changes?.eloRate}`,
+      `Seed Type: ${mostRecentMatch.seed?.overworld} » ${mostRecentMatch.seed?.nether}`,
+      `https://mcsrranked.com/stats/${player1.nickname}/${mostRecentMatch.id}`,
+      `${getRelativeTimeFromTimestamp(mostRecentMatch.date)} ago`,
+    ].filter(Boolean);
+
+    return sections.join(' \u2756 ');
   }
   async leaderboard(timeframe: Timeframe): Promise<void> {}
 }
