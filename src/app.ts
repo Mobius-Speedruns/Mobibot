@@ -1,11 +1,33 @@
-import express from "express";
-import router from "./routes/routes";
+// src/app.ts
 
-const app = express();
+// Load environment variables
+import dotenv from 'dotenv';
+import { PacemanClient } from './clients/paceman.api';
+import { RankedClient } from './clients/ranked.api';
+import { pinoLogger } from './clients/logger.client';
+import { MobibotClient } from './clients/mobibot.client';
+import { TwitchClient } from './clients/twitch.client';
+import { AppClient } from './clients/app.client';
+dotenv.config();
 
-app.use(express.json());
+// Create clients
+const paceman = new PacemanClient('https://paceman.gg/stats/api', pinoLogger);
+const ranked = new RankedClient('https://api.mcsrranked.com', pinoLogger);
+const mobibot = new MobibotClient(paceman, ranked, pinoLogger);
 
-// Routes
-app.use("/", router);
+// Initialize Twitch WebSocket client
+const twitchClient = new TwitchClient(pinoLogger);
 
-export default app;
+// Initialize your application bot
+const appClient = new AppClient(mobibot, twitchClient, pinoLogger);
+
+// Start the bot
+(async () => {
+  try {
+    await appClient.start();
+    console.log('Bot is running...');
+  } catch (err) {
+    console.error('Failed to start bot:', err);
+    process.exit(1);
+  }
+})();

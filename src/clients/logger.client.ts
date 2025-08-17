@@ -1,4 +1,6 @@
 import pino from 'pino';
+import dotenv from 'dotenv';
+dotenv.config();
 
 export enum LOGGER_LEVEL {
   SILENT = 'silent',
@@ -12,7 +14,7 @@ export const pinoLogger = pino({
   timestamp: pino.stdTimeFunctions.isoTime,
   serializers: pino.stdSerializers,
   enabled: true,
-  level: process.env.LOGGER_LEVEL || LOGGER_LEVEL.DEBUG,
+  level: process.env.LOGGER_LEVEL || LOGGER_LEVEL.SILENT,
   transport: {
     target: 'pino-pretty',
     options: {
