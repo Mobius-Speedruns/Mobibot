@@ -8,6 +8,10 @@ export enum Service {
   APP = '[APP]',
 }
 
+// Defaults for hours and hoursBetween
+export const HOURS = 100;
+export const HOURS_BETWEEN = 1;
+
 export enum BotCommand {
   SESSION = 'session',
   RESETS = 'resets',

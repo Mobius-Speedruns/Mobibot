@@ -120,11 +120,8 @@ export class PacemanClient {
     if (hours !== undefined) params.hours = hours;
     if (hoursBetween !== undefined) params.hoursBetween = hoursBetween;
 
-    const { data } = await this.api.get('/getNPH', {
-      params: {
-        name,
-      },
-    });
+    const { data } = await this.api.get('/getNPH', { params });
+
     const parsedData = nphSchema.parse(data);
     if (!parsedData) {
       this.logger.error('Invalid response from getNPH', data);

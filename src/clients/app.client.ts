@@ -3,7 +3,13 @@ import fs from 'fs';
 import path from 'path';
 import { MobibotClient } from './mobibot.client';
 import { Logger as PinoLogger } from 'pino';
-import { Service, BotCommand, HQ_CHANNEL } from '../types/app';
+import {
+  Service,
+  BotCommand,
+  HQ_CHANNEL,
+  HOURS_BETWEEN,
+  HOURS,
+} from '../types/app';
 import { SplitName } from '../types/paceman';
 import { TwitchClient } from './twitch.client';
 
@@ -30,6 +36,7 @@ export class AppClient {
     this.client = client;
     this.logger = logger.child({ Service: Service.APP });
 
+    // TODO: remove this temporary shizz and use a DB
     this.channels = fs.existsSync(CHANNELS_FILE)
       ? JSON.parse(fs.readFileSync(CHANNELS_FILE, 'utf-8'))
       : [];
@@ -173,6 +180,7 @@ export class AppClient {
     channel: string,
     cmd: string,
     mcName: string,
+    args: string[],
   ): Promise<void> {
     let response: string | void;
     switch (cmd.toLowerCase()) {
@@ -184,7 +192,11 @@ export class AppClient {
           'Documentation is available at https://github.com/Mobius-Speedruns/Mobibot/wiki';
         break;
       case BotCommand.SESSION:
-        response = await this.mobibotClient.session(mcName);
+        response = await this.mobibotClient.session(
+          mcName,
+          Number(args[0]) || HOURS,
+          Number(args[1]) || HOURS_BETWEEN,
+        );
         break;
       case BotCommand.LASTENTER:
       case BotCommand.LASTNETHER:
@@ -220,7 +232,11 @@ export class AppClient {
         response = await this.mobibotClient.lastsplit(mcName, SplitName.FINISH);
         break;
       case BotCommand.RESETS:
-        response = await this.mobibotClient.resets(mcName);
+        response = await this.mobibotClient.resets(
+          mcName,
+          Number(args[0]) || HOURS,
+          Number(args[1]) || HOURS_BETWEEN,
+        );
         break;
       case BotCommand.PB:
         response = await this.mobibotClient.pb(mcName);
@@ -264,27 +280,30 @@ export class AppClient {
     // Don't process if it is not a valid mobibot command.
     const parts = message.slice(1).trim().split(/\s+/);
     const cmd = parts[0];
-    const arg = parts.slice(1);
+    const args = parts.slice(1);
 
     if (!Object.values(BotCommand).includes(cmd as BotCommand)) return;
 
     let mcName: string | undefined;
     if (isPlus) {
-      mcName = arg[0];
+      mcName = args[0];
+      // TODO: possibly should remove this and default to the streamer.
       if (!mcName) {
         this.client.send(
           channel,
-          `⚠️ You must specify a Minecraft name after +${cmd}`,
+          `⚠️ You must specify a Minecraft Username after +${cmd}`,
         );
         return;
       }
+      // Remove name from args
+      args.shift();
     } else if (isBang) {
       const chanName = channel.replace('#', '');
       mcName = this.links[chanName];
       if (!mcName) {
         this.client.send(
           channel,
-          `⚠️ No linked Minecraft name for this channel.`,
+          `⚠️ No linked Minecraft Username for this channel.`,
         );
         return;
       }
@@ -297,7 +316,7 @@ export class AppClient {
         );
         return;
       }
-      await this.handleCommand(channel, cmd, mcName);
+      await this.handleCommand(channel, cmd, mcName, args);
       return;
     } catch (err) {
       this.logger.error(err);
