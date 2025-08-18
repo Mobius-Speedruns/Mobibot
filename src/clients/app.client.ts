@@ -12,10 +12,6 @@ import { SplitName } from '../types/paceman';
 import { TwitchClient } from './twitch.client';
 import { PostgresClient } from './postgres.client';
 
-interface Links {
-  [twitchName: string]: string; // twitchName -> minecraftName
-}
-
 export class AppClient {
   private db: PostgresClient;
   private client: TwitchClient;
