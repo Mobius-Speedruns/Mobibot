@@ -1,4 +1,4 @@
 export function appendInvisibleChars(str: string): string {
-  const invisibleSeq = '\u200B';
+  const invisibleSeq = '.';
   return str + invisibleSeq;
 }

@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS channels (
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL,
+  mc_name TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);

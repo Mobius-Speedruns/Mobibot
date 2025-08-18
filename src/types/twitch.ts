@@ -15,9 +15,20 @@ export const UserResponseSchema = z.object({
     }),
   ),
 });
+export const SubscriptionsSchema = z.object({
+  data: z.array(
+    z.object({
+      id: z.string(),
+      condition: z.object({
+        broadcaster_user_id: z.string(),
+      }),
+    }),
+  ),
+});
 
 export type AuthResponse = z.infer<typeof AuthResponseSchema>;
 export type UserReponse = z.infer<typeof UserResponseSchema>;
+export type Subscriptions = z.infer<typeof SubscriptionsSchema>;
 
 export interface TwitchMessage {
   broadcaster: string;

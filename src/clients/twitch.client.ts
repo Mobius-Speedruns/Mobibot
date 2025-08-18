@@ -4,6 +4,8 @@ import {
   AuthResponse,
   ChatMessageHandler,
   EventSubMessage,
+  Subscriptions,
+  SubscriptionsSchema,
   UserReponse,
 } from '../types/twitch';
 import WebSocket from 'ws';
@@ -97,9 +99,7 @@ export class TwitchClient extends EventEmitter {
     if (response.status !== 202) {
       this.logger.error('Failed to subscribe:', response.data);
     } else {
-      this.logger.info(
-        `Subscribed to channel.chat.message for broadcaster ${channelName}`,
-      );
+      this.logger.info(`Subscribed to ${channelName}`);
     }
   }
 
@@ -109,23 +109,27 @@ export class TwitchClient extends EventEmitter {
       return;
     }
 
-    const broadcasterUserId = await this.fetchChannelId(channelName);
+    const [broadcasterUserId, currentSubs] = await Promise.all([
+      this.fetchChannelId(channelName),
+      this.fetchSubscriptions(),
+    ]);
+
+    const subscription = currentSubs.data.find(
+      (sub) => sub.condition.broadcaster_user_id === broadcasterUserId,
+    );
 
     try {
       const response = await this.api.delete('helix/eventsub/subscriptions', {
-        data: { id: broadcasterUserId },
+        params: { id: subscription?.id },
       });
-
+      this.logger.debug(response);
       if (response.status === 204) {
-        this.logger.info(`Unsubscribed from channel ${broadcasterUserId}`);
+        this.logger.info(`Unsubscribed from channel ${channelName}`);
       } else {
         this.logger.error(`Failed to unsubscribe:`, response.data);
       }
     } catch (err: any) {
-      this.logger.error(
-        'Error unsubscribing:',
-        err.response?.data || err.message,
-      );
+      this.logger.error('Error unsubscribing:', err.response?.data || err);
     }
   }
 
@@ -251,9 +255,28 @@ export class TwitchClient extends EventEmitter {
         login: channelName,
       },
     });
-    if (response.data.data.length === 0)
+    if (response.data.data.length === 0) {
+      this.logger.error(response, 'Response from fetchChannelId');
       throw new Error('Cannot find channel.');
+    }
 
     return response.data.data[0].id;
+  }
+
+  private async fetchSubscriptions(): Promise<Subscriptions> {
+    const { data } = await this.api.get<Subscriptions>(
+      'helix/eventsub/subscriptions',
+      {
+        params: {
+          status: 'enabled',
+        },
+      },
+    );
+    const parsedData = SubscriptionsSchema.parse(data);
+    if (!parsedData) {
+      this.logger.error(data, 'Invalid response from fetchSubscriptions');
+      throw new Error('Invalid response from fetchSubscriptions');
+    }
+    return data;
   }
 }

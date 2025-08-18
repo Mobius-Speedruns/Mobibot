@@ -5,6 +5,7 @@ export enum Service {
   MOBIBOT = '[MOBIBOT]',
   RANKED = '[RANKED]',
   TWITCH = '[TWITCH]',
+  DB = '[DB]',
   APP = '[APP]',
 }
 

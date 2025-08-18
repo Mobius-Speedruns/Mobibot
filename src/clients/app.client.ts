@@ -1,6 +1,4 @@
 // src/bot/TwitchBotClient.ts
-import fs from 'fs';
-import path from 'path';
 import { MobibotClient } from './mobibot.client';
 import { Logger as PinoLogger } from 'pino';
 import {
@@ -12,61 +10,42 @@ import {
 } from '../types/app';
 import { SplitName } from '../types/paceman';
 import { TwitchClient } from './twitch.client';
-
-const CHANNELS_FILE = path.resolve(__dirname, '../data/channels.json');
-const LINKS_FILE = path.resolve(__dirname, '../data/links.json');
+import { PostgresClient } from './postgres.client';
 
 interface Links {
   [twitchName: string]: string; // twitchName -> minecraftName
 }
 
 export class AppClient {
+  private db: PostgresClient;
   private client: TwitchClient;
   private mobibotClient: MobibotClient;
-  private channels: string[] = [];
-  private links: Links = {};
   private logger: PinoLogger;
 
   constructor(
     mobibotClient: MobibotClient,
     client: TwitchClient,
+    db: PostgresClient,
     logger: PinoLogger,
   ) {
+    this.db = db;
     this.mobibotClient = mobibotClient;
     this.client = client;
     this.logger = logger.child({ Service: Service.APP });
-
-    // TODO: remove this temporary shizz and use a DB
-    this.channels = fs.existsSync(CHANNELS_FILE)
-      ? JSON.parse(fs.readFileSync(CHANNELS_FILE, 'utf-8'))
-      : [];
-    this.links = fs.existsSync(LINKS_FILE)
-      ? JSON.parse(fs.readFileSync(LINKS_FILE, 'utf-8'))
-      : {};
-  }
-
-  private saveChannels() {
-    fs.writeFileSync(CHANNELS_FILE, JSON.stringify(this.channels, null, 2));
-  }
-
-  private saveLinks() {
-    fs.writeFileSync(LINKS_FILE, JSON.stringify(this.links, null, 2));
   }
 
   public async start() {
+    await this.db.init();
     // Add HQ channel if not already in channels
-    if (!this.channels.includes(HQ_CHANNEL)) {
-      this.channels.push(HQ_CHANNEL);
-      this.links[HQ_CHANNEL] = 'Inverted_Mobius';
-    }
+    await this.db.upsertChannel('mobiusspeedruns', 'Inverted_Mobius');
 
     await this.client.connect();
 
+    const channels = await this.db.listChannels();
     // Subscribe to each channel
-    for (const channel of this.channels) {
+    for (const channel of channels) {
       try {
         await this.client.subscribe(channel);
-        this.logger.debug(`Subscribed to EventSub for channel: ${channel}`);
       } catch (err) {
         this.logger.error(`Failed to subscribe to channel ${channel}`);
         this.logger.error(err);
@@ -77,7 +56,26 @@ export class AppClient {
       this.handleMessage(channel, tags, message);
     });
 
-    this.logger.debug(`Bot connected to channels: ${this.channels.join(', ')}`);
+    this.logger.debug(`Bot connected to channels: ${channels.join(', ')}`);
+  }
+
+  public async shutdown() {
+    this.logger.info('Shutting down bot, unsubscribing from all channels...');
+
+    const channels = await this.db.listChannels();
+
+    // unsubscribe from each channel
+    for (const channel of channels) {
+      try {
+        await this.client.unsubscribe(channel);
+        this.logger.info(`Unsubscribed from channel ${channel}`);
+      } catch (err: unknown) {
+        this.logger.error(`Failed to unsubscribe from channel ${channel}`);
+      }
+    }
+
+    await this.db.close();
+    this.logger.info('Database connection closed');
   }
 
   // -----------------------------
@@ -86,27 +84,37 @@ export class AppClient {
   private async subscribe(requester: string, channel: string, message: string) {
     const chanName = requester.toLowerCase();
     const mcName = message.split(' ')[1];
+
     if (!mcName) {
       this.client.send(channel, `⚠️ Please provide your Minecraft Username.`);
       return;
     }
 
-    if (!this.channels.includes(chanName)) {
-      this.channels.push(chanName);
-      this.saveChannels();
+    try {
+      const channelRecord = await this.db.upsertChannel(chanName, mcName);
 
-      this.links[chanName] = mcName;
-      this.saveLinks();
+      if (!channelRecord.existed) {
+        await this.client.subscribe(chanName);
+        this.client.send(
+          channel,
+          `✅ Bot subscribed to ${chanName} with Minecraft Username: ${mcName}`,
+        );
+      } else {
+        this.client.send(
+          channel,
+          `⚠️ Already subscribed. Use !link to update your Minecraft Username.`,
+        );
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        this.logger.error(`Failed to subscribe ${chanName}: ${err.message}`);
+      } else {
+        this.logger.error(`Failed to subscribe ${chanName}: ${String(err)}`);
+      }
 
-      await this.client.subscribe(chanName);
       this.client.send(
         channel,
-        `✅ Bot subscribed to ${chanName} with Minecraft Username: ${mcName}`,
-      );
-    } else {
-      this.client.send(
-        channel,
-        `⚠️ Already subscribed. Use !link to update your Minecraft Username.`,
+        `⚠️ Could not subscribe to ${chanName} due to a database error.`,
       );
     }
   }
@@ -119,58 +127,108 @@ export class AppClient {
       return;
     }
 
-    if (this.channels.includes(chanName)) {
-      this.channels = this.channels.filter((c) => c !== chanName);
-      this.saveChannels();
-
-      if (this.links[chanName]) {
-        delete this.links[chanName];
-        this.saveLinks();
+    try {
+      try {
+        await this.client.unsubscribe(chanName);
+      } catch {
+        this.client.send(
+          channel,
+          `⚠️ Could not unsubscribe ${chanName} due to an error.`,
+        );
+        this.logger.error(`Failed to unsubscribe ${chanName}`);
+        return;
       }
 
-      await this.client.unsubscribe(chanName);
-      this.client.send(channel, `❌ Bot unsubscribed from ${chanName}.`);
-    } else {
-      this.client.send(channel, `⚠️ Channel is not subscribed.`);
+      // 2. If successful, try removing from DB
+      const removed = await this.db.removeChannel(chanName);
+
+      if (removed) {
+        this.client.send(channel, `❌ Bot unsubscribed from ${chanName}.`);
+      } else {
+        // rollback? re-subscribe? at least log
+        this.logger.warn(
+          `Unsubscribed from Twitch but channel ${chanName} not found in DB.`,
+        );
+        this.client.send(channel, `⚠️ Channel was not found in database.`);
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        this.logger.error(`Failed to unsubscribe ${chanName}: ${err.message}`);
+      } else {
+        this.logger.error(`Failed to unsubscribe ${chanName}: ${String(err)}`);
+      }
+      this.client.send(
+        channel,
+        `⚠️ Could not unsubscribe ${chanName} due to an error.`,
+      );
     }
   }
 
   private async link(requester: string, channel: string, message: string) {
     const chanName = requester.toLowerCase();
     const mcName = message.split(' ')[1];
+
     if (!mcName) {
       this.client.send(channel, `⚠️ Please provide your Minecraft Username.`);
       return;
     }
 
-    if (!this.channels.includes(chanName)) {
-      this.client.send(channel, `⚠️ Not subscribed. Use !subscribe first.`);
-      return;
-    }
+    try {
+      await this.db.upsertChannel(chanName, mcName);
+      this.client.send(
+        channel,
+        `✅ Linked Minecraft Username ${mcName} for ${chanName}`,
+      );
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        this.logger.error(
+          `Failed to link MC username for ${chanName}: ${err.message}`,
+        );
+      } else {
+        this.logger.error(
+          `Failed to link MC username for ${chanName}: ${String(err)}`,
+        );
+      }
 
-    this.links[chanName] = mcName;
-    this.saveLinks();
-    this.client.send(
-      channel,
-      `✅ Linked Minecraft Username ${mcName} for ${chanName}`,
-    );
+      this.client.send(
+        channel,
+        `⚠️ Could not link Minecraft Username due to a database error.`,
+      );
+    }
   }
 
   private async unlink(requester: string, channel: string) {
     const chanName = requester.toLowerCase();
-    if (!this.channels.includes(chanName)) {
-      this.client.send(channel, `⚠️ Not subscribed. Use !subscribe first.`);
-      return;
-    }
 
-    if (!this.links[chanName]) {
-      this.client.send(channel, `⚠️ No linked Minecraft Username to unlink.`);
-      return;
-    }
+    try {
+      const mcUsername = await this.db.getMcName(chanName);
 
-    delete this.links[chanName];
-    this.saveLinks();
-    this.client.send(channel, `❌ Unlinked Minecraft Username for ${chanName}`);
+      if (!mcUsername) {
+        this.client.send(
+          channel,
+          `⚠️ No linked Minecraft Username to ${chanName}.`,
+        );
+        return;
+      }
+
+      await this.db.upsertChannel(chanName);
+      this.client.send(channel, `❌ Unlinked ${mcUsername} for ${chanName}`);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        this.logger.error(
+          `Failed to unlink MC username for ${chanName}: ${err.message}`,
+        );
+      } else {
+        this.logger.error(
+          `Failed to unlink MC username for ${chanName}: ${String(err)}`,
+        );
+      }
+
+      this.client.send(
+        channel,
+        `⚠️ Could not unlink Minecraft Username due to a database error.`,
+      );
+    }
   }
 
   // -----------------------------
@@ -272,37 +330,46 @@ export class AppClient {
     const username = tags.username || '';
     const lower = message.toLowerCase();
 
-    // Subscription / link commands
-    // if (lower.startsWith('!subscribe'))
-    //   return this.subscribe(username, channel, message);
-    // if (lower.startsWith('!unsubscribe'))
-    //   return this.unsubscribe(username, channel);
-    // if (lower.startsWith('!link')) return this.link(username, channel, message);
-    // if (lower.startsWith('!unlink')) return this.unlink(username, channel);
-
-    // Don't process if it is not a valid mobibot command.
-    const parts = message.slice(1).trim().split(/\s+/);
+    const parts = lower.slice(1).trim().split(/\s+/);
     const cmd = parts[0];
     const args = parts.slice(1);
 
+    // Subscription / link commands
+    switch (cmd) {
+      case 'subscribe':
+        return this.subscribe(username, channel, message);
+      case 'unsubscribe':
+        return this.unsubscribe(username, channel);
+      case 'link':
+        return this.link(username, channel, message);
+      case 'unlink':
+        return this.unlink(username, channel);
+    }
+
+    // Don't process if it is not a valid mobibot command.
     if (!Object.values(BotCommand).includes(cmd as BotCommand)) return;
 
     let mcName: string | undefined;
     if (isPlus) {
       mcName = args[0];
-      // TODO: possibly should remove this and default to the streamer.
       if (!mcName) {
-        this.client.send(
-          channel,
-          `⚠️ You must specify a Minecraft Username after +${cmd}`,
-        );
-        return;
+        // Attempt to find subscription
+        const subscribed_mcName = await this.db.getMcName(username);
+        if (!subscribed_mcName) {
+          this.client.send(
+            channel,
+            `⚠️ You must specify a Minecraft Username after +${cmd}`,
+          );
+          return;
+        }
+        // Safe to use subscribed_mcName
+        mcName = subscribed_mcName;
       }
       // Remove name from args
       args.shift();
     } else if (isBang) {
       const chanName = channel.replace('#', '');
-      mcName = this.links[chanName];
+      mcName = await this.db.getMcName(chanName);
       if (!mcName) {
         this.client.send(
           channel,
