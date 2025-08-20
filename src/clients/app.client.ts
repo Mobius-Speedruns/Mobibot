@@ -11,6 +11,7 @@ import {
 import { SplitName } from '../types/paceman';
 import { TwitchClient } from './twitch.client';
 import { PostgresClient } from './postgres.client';
+import { ChatTags } from '../types/twitch';
 
 export class AppClient {
   private db: PostgresClient;
@@ -33,7 +34,7 @@ export class AppClient {
   public async start() {
     await this.db.init();
     // Add HQ channel if not already in channels
-    await this.db.upsertChannel('mobiusspeedruns', 'Inverted_Mobius');
+    await this.db.upsertChannel(process.env.HQ_TWITCH!, process.env.HQ_MC);
 
     await this.client.connect();
 
@@ -49,7 +50,9 @@ export class AppClient {
     }
 
     this.client.onChatMessage((channel, tags, message) => {
-      this.handleMessage(channel, tags, message);
+      this.handleMessage(channel, tags, message).catch((err: unknown) => {
+        this.logger.error(err, 'Error handling message');
+      });
     });
 
     this.logger.debug(`Bot connected to channels: ${channels.join(', ')}`);
@@ -66,7 +69,7 @@ export class AppClient {
         await this.client.unsubscribe(channel);
         this.logger.info(`Unsubscribed from channel ${channel}`);
       } catch (err: unknown) {
-        this.logger.error(`Failed to unsubscribe from channel ${channel}`);
+        this.logger.error(err, `Failed to unsubscribe from channel ${channel}`);
       }
     }
 
@@ -82,21 +85,24 @@ export class AppClient {
     const mcName = message.split(' ')[1];
 
     if (!mcName) {
-      this.client.send(channel, `⚠️ Please provide your Minecraft Username.`);
+      await this.client.send(
+        channel,
+        `⚠️ Please provide your Minecraft Username.`,
+      );
       return;
     }
 
     try {
       const channelRecord = await this.db.upsertChannel(chanName, mcName);
 
-      if (!channelRecord.existed) {
+      if (!channelRecord) {
         await this.client.subscribe(chanName);
-        this.client.send(
+        await this.client.send(
           channel,
           `✅ Bot subscribed to ${chanName} with Minecraft Username: ${mcName}`,
         );
       } else {
-        this.client.send(
+        await this.client.send(
           channel,
           `⚠️ Already subscribed. Use !link to update your Minecraft Username.`,
         );
@@ -108,7 +114,7 @@ export class AppClient {
         this.logger.error(`Failed to subscribe ${chanName}: ${String(err)}`);
       }
 
-      this.client.send(
+      await this.client.send(
         channel,
         `⚠️ Could not subscribe to ${chanName} due to a database error.`,
       );
@@ -119,7 +125,7 @@ export class AppClient {
     const chanName = requester.toLowerCase();
 
     if (chanName === HQ_CHANNEL) {
-      this.client.send(channel, `⚠️ Cannot unsubscribe from HQ channel.`);
+      await this.client.send(channel, `⚠️ Cannot unsubscribe from HQ channel.`);
       return;
     }
 
@@ -127,7 +133,7 @@ export class AppClient {
       try {
         await this.client.unsubscribe(chanName);
       } catch {
-        this.client.send(
+        await this.client.send(
           channel,
           `⚠️ Could not unsubscribe ${chanName} due to an error.`,
         );
@@ -139,13 +145,19 @@ export class AppClient {
       const removed = await this.db.removeChannel(chanName);
 
       if (removed) {
-        this.client.send(channel, `❌ Bot unsubscribed from ${chanName}.`);
+        await this.client.send(
+          channel,
+          `❌ Bot unsubscribed from ${chanName}.`,
+        );
       } else {
         // rollback? re-subscribe? at least log
         this.logger.warn(
           `Unsubscribed from Twitch but channel ${chanName} not found in DB.`,
         );
-        this.client.send(channel, `⚠️ Channel was not found in database.`);
+        await this.client.send(
+          channel,
+          `⚠️ Channel was not found in database.`,
+        );
       }
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -153,7 +165,7 @@ export class AppClient {
       } else {
         this.logger.error(`Failed to unsubscribe ${chanName}: ${String(err)}`);
       }
-      this.client.send(
+      await this.client.send(
         channel,
         `⚠️ Could not unsubscribe ${chanName} due to an error.`,
       );
@@ -165,13 +177,35 @@ export class AppClient {
     const mcName = message.split(' ')[1];
 
     if (!mcName) {
-      this.client.send(channel, `⚠️ Please provide your Minecraft Username.`);
+      await this.client.send(
+        channel,
+        `⚠️ Please provide your Minecraft Username.`,
+      );
       return;
+    }
+
+    // Check if user exists
+    try {
+      const dbChannel = await this.db.getChannel(chanName);
+      if (!dbChannel) {
+        this.logger.warn(
+          `User attempted to link while unsubscribed for ${chanName}`,
+        );
+        await this.client.send(
+          channel,
+          `⚠️ You must !subscribe first before linking.`,
+        );
+      }
+    } catch {
+      await this.client.send(
+        channel,
+        `⚠️ Could not link Minecraft Username due to a database error.`,
+      );
     }
 
     try {
       await this.db.upsertChannel(chanName, mcName);
-      this.client.send(
+      await this.client.send(
         channel,
         `✅ Linked Minecraft Username ${mcName} for ${chanName}`,
       );
@@ -186,7 +220,7 @@ export class AppClient {
         );
       }
 
-      this.client.send(
+      await this.client.send(
         channel,
         `⚠️ Could not link Minecraft Username due to a database error.`,
       );
@@ -200,7 +234,7 @@ export class AppClient {
       const mcUsername = await this.db.getMcName(chanName);
 
       if (!mcUsername) {
-        this.client.send(
+        await this.client.send(
           channel,
           `⚠️ No linked Minecraft Username to ${chanName}.`,
         );
@@ -208,7 +242,10 @@ export class AppClient {
       }
 
       await this.db.upsertChannel(chanName);
-      this.client.send(channel, `❌ Unlinked ${mcUsername} for ${chanName}`);
+      await this.client.send(
+        channel,
+        `❌ Unlinked ${mcUsername} for ${chanName}`,
+      );
     } catch (err: unknown) {
       if (err instanceof Error) {
         this.logger.error(
@@ -220,7 +257,7 @@ export class AppClient {
         );
       }
 
-      this.client.send(
+      await this.client.send(
         channel,
         `⚠️ Could not unlink Minecraft Username due to a database error.`,
       );
@@ -237,7 +274,7 @@ export class AppClient {
     args: string[],
   ): Promise<void> {
     let response: string | void;
-    switch (cmd.toLowerCase()) {
+    switch (cmd.toLowerCase() as BotCommand) {
       case BotCommand.COMMANDS:
       case BotCommand.DOCS:
       case BotCommand.DOCUMENTATION:
@@ -309,13 +346,17 @@ export class AppClient {
         return;
     }
 
-    if (response) this.client.send(channel, response);
+    if (response) await this.client.send(channel, response);
   }
 
   // -----------------------------
   // Message Handler
   // -----------------------------
-  private async handleMessage(channel: string, tags: any, message: string) {
+  private async handleMessage(
+    channel: string,
+    tags: ChatTags,
+    message: string,
+  ) {
     // Handle + and ! commands
     const isPlus = message.startsWith('+');
     const isBang = message.startsWith('!');
@@ -324,7 +365,7 @@ export class AppClient {
     if (!isPlus && !isBang) return;
 
     const username = tags.username || '';
-    const lower = message.toLowerCase();
+    const lower = message.toLowerCase().trim();
 
     const parts = lower.slice(1).trim().split(/\s+/);
     const cmd = parts[0];
@@ -345,14 +386,14 @@ export class AppClient {
     // Don't process if it is not a valid mobibot command.
     if (!Object.values(BotCommand).includes(cmd as BotCommand)) return;
 
-    let mcName: string | undefined;
+    let mcName: string | null;
     if (isPlus) {
       mcName = args[0];
       if (!mcName) {
         // Attempt to find subscription
         const subscribed_mcName = await this.db.getMcName(username);
         if (!subscribed_mcName) {
-          this.client.send(
+          await this.client.send(
             channel,
             `⚠️ You must specify a Minecraft Username after +${cmd}`,
           );
@@ -363,11 +404,11 @@ export class AppClient {
       }
       // Remove name from args
       args.shift();
-    } else if (isBang) {
+    } else {
       const chanName = channel.replace('#', '');
       mcName = await this.db.getMcName(chanName);
       if (!mcName) {
-        this.client.send(
+        await this.client.send(
           channel,
           `⚠️ No linked Minecraft Username for this channel.`,
         );

@@ -69,9 +69,15 @@ export const pbSchema = z.array(
     pb: z.string(),
   }),
 );
+export const userSchema = z.object({
+  id: z.string(),
+  nick: z.string(),
+});
+export const getAllUsersResponseSchema = z.array(userSchema);
 
 export type Run = z.infer<typeof runSchema>;
 export type RecentRuns = z.infer<typeof recentRunSchema>;
 export type NPH = z.infer<typeof nphSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type PB = z.infer<typeof pbSchema>;
+export type User = z.infer<typeof userSchema>;

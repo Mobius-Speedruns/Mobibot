@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 export function handleNotFound<
   T extends (this: any, ...args: any[]) => Promise<any>,
 >(fn: T): T {

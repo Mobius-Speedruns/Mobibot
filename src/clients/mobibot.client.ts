@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import { Logger as PinoLogger } from 'pino';
 import { PacemanClient } from './paceman.api';
-import { SplitName, Timeframe } from '../types/paceman';
+import { SplitName } from '../types/paceman';
 import { Service } from '../types/app';
 import {
   getRelativeTime,
@@ -106,6 +107,7 @@ export class MobibotClient {
   }
   async pb(names: string): Promise<string> {
     const pbs = await this.paceman.getPBs(names);
+    if (!pbs) return 'Unable to fetch pbs, try again later';
     const response = pbs
       .map(
         (pb) =>
@@ -247,5 +249,4 @@ export class MobibotClient {
     return sections.join(' \u2756 ');
   }
   // TODO: record/vs command.
-  async leaderboard(timeframe: Timeframe): Promise<void> {}
 }

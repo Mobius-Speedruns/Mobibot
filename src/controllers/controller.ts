@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response } from 'express';
 import { PacemanClient } from '../clients/paceman.api';
 import { pinoLogger } from '../clients/logger.client';
 import { MobibotClient } from '../clients/mobibot.client';
@@ -9,11 +9,7 @@ const paceman = new PacemanClient('https://paceman.gg/stats/api', pinoLogger);
 const ranked = new RankedClient('https://api.mcsrranked.com', pinoLogger);
 const mobibot = new MobibotClient(paceman, ranked, pinoLogger);
 
-export const getSession = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
+export const getSession = async (req: Request, res: Response) => {
   try {
     const name = req.query.name as string;
     const hours = req.query.hours ? Number(req.query.hours) : undefined;
@@ -29,11 +25,7 @@ export const getSession = async (
   }
 };
 
-export const lastPace = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
+export const lastPace = async (req: Request, res: Response) => {
   try {
     const name = req.query.name as string;
     const lastsplit = await mobibot.lastpace(name);
@@ -44,11 +36,7 @@ export const lastPace = async (
   }
 };
 
-export const lastSplit = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
+export const lastSplit = async (req: Request, res: Response) => {
   try {
     const name = req.query.name as string;
     const splitname = req.query.splitname as string;
@@ -69,7 +57,7 @@ export const lastSplit = async (
   }
 };
 
-export const pbs = async (req: Request, res: Response, next: NextFunction) => {
+export const pbs = async (req: Request, res: Response) => {
   try {
     const names = req.query.name as string;
 
@@ -81,11 +69,7 @@ export const pbs = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-export const resets = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
+export const resets = async (req: Request, res: Response) => {
   try {
     const name = req.query.name as string;
     const hours = req.query.hours ? Number(req.query.hours) : undefined;
@@ -101,7 +85,7 @@ export const resets = async (
   }
 };
 
-export const elo = async (req: Request, res: Response, next: NextFunction) => {
+export const elo = async (req: Request, res: Response) => {
   try {
     const name = req.query.name as string;
 
@@ -113,11 +97,7 @@ export const elo = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-export const lastmatch = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
+export const lastmatch = async (req: Request, res: Response) => {
   try {
     const name = req.query.name as string;
 

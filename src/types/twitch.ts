@@ -36,16 +36,64 @@ export interface TwitchMessage {
   text: string;
 }
 
-export interface EventSubMessage {
-  metadata: {
-    message_type: string;
-    subscription_type?: string;
-  };
-  payload: any;
+export const chatEventPayload = z.object({
+  event: z.object({
+    broadcaster_user_id: z.string(),
+    broadcaster_user_login: z.string(),
+    broadcaster_user_name: z.string(),
+    chatter_user_id: z.string(),
+    chatter_user_login: z.string(),
+    chatter_user_name: z.string(),
+    message: z.object({
+      text: z.string(),
+    }),
+    message_type: z.string(),
+  }),
+});
+
+export const sessionWelcomeEventPayload = z.object({
+  session: z.object({
+    id: z.string(),
+    status: z.string(),
+    connected_at: z.string(),
+    keepalive_timeout_seconds: z.number(),
+  }),
+});
+
+const baseMetadata = z.object({
+  message_id: z.string(),
+  message_type: z.string(),
+  message_timestamp: z.string(),
+  subscription_type: z.string().optional(),
+});
+
+export const notificationMessage = z.object({
+  metadata: baseMetadata.extend({
+    message_type: z.literal('notification'),
+    subscription_type: z.literal('channel.chat.message'),
+  }),
+  payload: chatEventPayload,
+});
+
+export const sessionWelcomeMessage = z.object({
+  metadata: baseMetadata.extend({
+    message_type: z.literal('session_welcome'),
+  }),
+  payload: sessionWelcomeEventPayload,
+});
+
+export const eventSubMessage = z.union([
+  notificationMessage,
+  sessionWelcomeMessage,
+]);
+export type EventSubMessage = z.infer<typeof eventSubMessage>;
+
+export interface ChatTags {
+  username?: string;
 }
 
 export type ChatMessageHandler = (
   channel: string,
-  tags: any,
+  tags: ChatTags,
   message: string,
 ) => void;

@@ -12,6 +12,12 @@ export const PLAYER_NOT_FOUND_MESSAGES = [
   'This player is not exist.',
 ];
 
+export const ErrorResponseSchema = z.object({
+  status: z.string(),
+  data: z.string(),
+});
+export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
+
 export const UserProfileSchema = z.object({
   uuid: z.string(),
   nickname: z.string(),

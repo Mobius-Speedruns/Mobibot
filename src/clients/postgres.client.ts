@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { Logger as PinoLogger } from 'pino';
 import { Service } from '../types/app';
+import { ChannelRow, ChannelRowSchema } from '../types/postgres';
 
 export class PostgresClient {
   private pool: Pool;
@@ -24,8 +25,11 @@ export class PostgresClient {
     await this.pool.query(sql);
   }
 
-  async upsertChannel(name: string, mcName?: string) {
-    const res = await this.pool.query(
+  async upsertChannel(
+    name: string,
+    mcName?: string,
+  ): Promise<ChannelRow | null> {
+    const res = await this.pool.query<ChannelRow>(
       `INSERT INTO channels (name, mc_name)
        VALUES ($1, $2)
        ON CONFLICT (name)
@@ -37,16 +41,29 @@ export class PostgresClient {
     return res.rows[0];
   }
 
-  async getMcName(name: string) {
-    const res = await this.pool.query(
+  async getMcName(channelName: string): Promise<string | null> {
+    const res = await this.pool.query<Pick<ChannelRow, 'mc_name'>>(
       `SELECT mc_name FROM channels WHERE name = $1`,
-      [name.toLowerCase()],
+      [channelName.toLowerCase()],
     );
-    return res.rows[0]?.mc_name ?? null;
+    if (res.rowCount === 0) return null;
+
+    return res.rows[0].mc_name;
+  }
+
+  async getChannel(channelName: string): Promise<ChannelRow | null> {
+    const res = await this.pool.query<Pick<ChannelRow, 'name'>>(
+      `SELECT * FROM channels WHERE name = $1`,
+      [channelName.toLowerCase()],
+    );
+    if (res.rowCount === 0) return null;
+
+    // Validate & coerce the first row
+    return ChannelRowSchema.parse(res.rows[0]);
   }
 
   async listChannels(): Promise<string[]> {
-    const res = await this.pool.query(
+    const res = await this.pool.query<Pick<ChannelRow, 'name'>>(
       `SELECT name FROM channels ORDER BY created_at ASC`,
     );
     return res.rows.map((r) => r.name);

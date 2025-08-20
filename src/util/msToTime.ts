@@ -1,13 +1,13 @@
 export function msToTime(ms: number): string {
-  let totalSeconds = Math.floor(ms / 1000);
-  let hours = Math.floor(totalSeconds / 3600);
-  let minutes = Math.floor((totalSeconds % 3600) / 60);
-  let seconds = totalSeconds % 60;
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
 
   // Pad hours/minutes/seconds with leading zeros
-  let hourStr = String(hours).padStart(2, '0');
-  let minStr = String(minutes).padStart(2, '0');
-  let secStr = String(seconds).padStart(2, '0');
+  const hourStr = String(hours).padStart(2, '0');
+  const minStr = String(minutes).padStart(2, '0');
+  const secStr = String(seconds).padStart(2, '0');
 
   return hours > 0 ? `${hourStr}:${minStr}:${secStr}` : `${minStr}:${secStr}`;
 }

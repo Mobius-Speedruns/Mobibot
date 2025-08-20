@@ -1,7 +1,8 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosError, AxiosInstance } from 'axios';
 import { type Logger as PinoLogger } from 'pino';
 import { Service } from '../types/app';
 import {
+  ErrorResponse,
   GetUserDataResponse,
   GetUserDataResponseSchema,
   MatchesResponse,
@@ -24,18 +25,26 @@ export class RankedClient {
 
         return response;
       },
-      (error) => {
-        this.logger.error(error.response.data);
+      (error: unknown) => {
+        if (error instanceof AxiosError) {
+          const responseData = error.response?.data as
+            | ErrorResponse
+            | undefined;
 
-        if (
-          error.response &&
-          error.response.status === 400 &&
-          typeof error.response.data === 'object' &&
-          PLAYER_NOT_FOUND_MESSAGES.includes(error.response.data?.data)
-        ) {
-          throw new Error('Player not found.');
+          if (
+            responseData &&
+            responseData.status === 'error' &&
+            PLAYER_NOT_FOUND_MESSAGES.includes(responseData.data)
+          ) {
+            this.logger.error(responseData.data);
+            throw new Error('Player not found.');
+          }
+
+          this.logger.error(error);
+          throw error;
+        } else {
+          throw error;
         }
-        throw error;
       },
     );
   }
@@ -84,11 +93,11 @@ export class RankedClient {
   }
 
   async getUserData(name: string): Promise<GetUserDataResponse> {
-    const { data } = await this.api.get(`/users/${name}`);
+    const { data } = await this.api.get<GetUserDataResponse>(`/users/${name}`);
 
     const parsedData = GetUserDataResponseSchema.parse(data);
     if (!parsedData) {
-      this.logger.error('Invalid response from getUserData', data);
+      this.logger.error(data, 'Invalid response from getUserData');
       throw new Error('Invalid response from getUserData');
     }
 
@@ -96,10 +105,12 @@ export class RankedClient {
   }
 
   async getRecentMatches(name: string): Promise<MatchesResponse> {
-    const { data } = await this.api.get(`/users/${name}/matches`);
+    const { data } = await this.api.get<MatchesResponse>(
+      `/users/${name}/matches`,
+    );
     const parsedData = MatchesResponseSchema.parse(data);
     if (!parsedData) {
-      this.logger.error('Invalid response from getRecentMatches', data);
+      this.logger.error(data, 'Invalid response from getRecentMatches');
       throw new Error('Invalid response from getUserData');
     }
 
@@ -107,12 +118,12 @@ export class RankedClient {
   }
 
   async getVersusData(name1: string, name2: string): Promise<MatchesResponse> {
-    const { data } = await this.api.get(
+    const { data } = await this.api.get<MatchesResponse>(
       `/users/${name1}/versus/${name2}/matches`,
     );
     const parsedData = MatchesResponseSchema.parse(data);
     if (!parsedData) {
-      this.logger.error('Invalid response from getVersusData', data);
+      this.logger.error(data, 'Invalid response from getVersusData');
       throw new Error('Invalid response from getVersusData');
     }
 

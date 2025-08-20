@@ -3,7 +3,10 @@ import { Logger as PinoLogger } from 'pino';
 import {
   AuthResponse,
   ChatMessageHandler,
+  eventSubMessage,
   EventSubMessage,
+  notificationMessage,
+  sessionWelcomeMessage,
   Subscriptions,
   SubscriptionsSchema,
   UserReponse,
@@ -11,6 +14,8 @@ import {
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { Service } from '../types/app';
+import { parseError } from '../util/parseError';
+import z from 'zod';
 
 export class TwitchClient extends EventEmitter {
   private authApi: AxiosInstance;
@@ -60,6 +65,7 @@ export class TwitchClient extends EventEmitter {
     // Interceptor to inject fresh OAuth token into every request
     this.api.interceptors.request.use(async (config) => {
       const token = await this.fetchToken();
+      if (!token) return config;
       config.headers = config.headers || {};
       config.headers['Authorization'] = `Bearer ${token}`;
       return config;
@@ -101,7 +107,7 @@ export class TwitchClient extends EventEmitter {
     const response = await this.api.post('helix/eventsub/subscriptions', body);
 
     if (response.status !== 202) {
-      this.logger.error('Failed to subscribe:', response.data);
+      this.logger.error(response.data, 'Failed to subscribe:');
     } else {
       this.logger.info(`Subscribed to ${channelName}`);
     }
@@ -130,10 +136,10 @@ export class TwitchClient extends EventEmitter {
       if (response.status === 204) {
         this.logger.info(`Unsubscribed from channel ${channelName}`);
       } else {
-        this.logger.error(`Failed to unsubscribe:`, response.data);
+        this.logger.error(response.data, `Failed to unsubscribe:`);
       }
-    } catch (err: any) {
-      this.logger.error('Error unsubscribing:', err.response?.data || err);
+    } catch (err: unknown) {
+      this.logger.error(err, 'Error unsubscribing:');
     }
   }
 
@@ -156,13 +162,13 @@ export class TwitchClient extends EventEmitter {
     this.logger.debug(`Sent message: ${message}`);
   }
 
-  private fetchToken() {
+  private async fetchToken() {
     const now = Date.now();
     // If token is still valid, return it
     if (this.oauthToken && now < this.oauthExpires) {
       return this.oauthToken;
     }
-    return this.refreshAccessToken();
+    return await this.refreshAccessToken();
   }
 
   private async refreshAccessToken() {
@@ -185,13 +191,10 @@ export class TwitchClient extends EventEmitter {
       this.oauthToken = data.access_token;
       this.oauthRefreshToken = data.refresh_token;
       this.oauthExpires = Date.now() + data.expires_in * 1000;
-    } catch (err: any) {
-      this.logger.error(err.response);
-      throw new Error(
-        `Failed to refresh Twitch token: ${err.response?.status} ${JSON.stringify(
-          err.response?.data,
-        )}`,
-      );
+    } catch (err: unknown) {
+      const msg = parseError(err);
+      this.logger.error(msg);
+      throw new Error(`Failed to refresh Twitch token`);
     }
   }
 
@@ -213,29 +216,41 @@ export class TwitchClient extends EventEmitter {
     }
   }
 
+  private isSessionWelcome(
+    msg: EventSubMessage,
+  ): msg is z.infer<typeof sessionWelcomeMessage> {
+    return msg.metadata.message_type === 'session_welcome';
+  }
+
+  private isNotification(
+    msg: EventSubMessage,
+  ): msg is z.infer<typeof notificationMessage> {
+    return msg.metadata.message_type === 'notification';
+  }
+
   private handleWebSocketMessage(message: EventSubMessage) {
-    switch (message.metadata.message_type) {
-      case 'session_welcome':
-        this.sessionId = message.payload.session.id;
-        this.logger.info(`WebSocket session initialized: ${this.sessionId}`);
-        if (this.readyResolve) this.readyResolve(); // Resolve connect()
-        break;
+    // Initial connection
+    if (this.isSessionWelcome(message)) {
+      this.sessionId = message.payload.session.id;
+      this.logger.info(`WebSocket session initialized: ${this.sessionId}`);
+      if (this.readyResolve) this.readyResolve(); // Resolve connect()
+    }
 
-      case 'notification':
-        if (message.metadata.subscription_type === 'channel.chat.message') {
-          const event = message.payload.event;
-          this.logger.debug(event, 'Incoming chat message.');
+    // Incoming chat messages
+    if (this.isNotification(message)) {
+      if (message.metadata.subscription_type === 'channel.chat.message') {
+        const event = message.payload.event;
+        this.logger.debug(event, 'Incoming chat message.');
 
-          // Forward the message to the handler if registered
-          if (this.messageHandler) {
-            this.messageHandler(
-              event.broadcaster_user_login,
-              { username: event.chatter_user_login },
-              event.message.text,
-            );
-          }
+        // Forward the message to the handler if registered
+        if (this.messageHandler) {
+          this.messageHandler(
+            event.broadcaster_user_login,
+            { username: event.chatter_user_login },
+            event.message.text,
+          );
         }
-        break;
+      }
     }
   }
 
@@ -246,9 +261,36 @@ export class TwitchClient extends EventEmitter {
       this.logger.info('Connected to Twitch EventSub WebSocket');
     });
 
-    this.websocket.on('message', (data: WebSocket.RawData) =>
-      this.handleWebSocketMessage(JSON.parse(data.toString())),
-    );
+    this.websocket.on('message', (data: WebSocket.RawData) => {
+      // Typescript ahh moment
+      let rawString: string;
+      if (typeof data === 'string') {
+        rawString = data;
+      } else if (Buffer.isBuffer(data)) {
+        rawString = data.toString('utf-8');
+      } else if (data instanceof ArrayBuffer) {
+        rawString = new TextDecoder().decode(data);
+      } else {
+        this.logger.error('Unknown WebSocket data type');
+        return;
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(rawString);
+      } catch (err) {
+        this.logger.error(err, 'Failed to parse WebSocket message');
+        return;
+      }
+
+      const message = eventSubMessage.safeParse(parsed);
+      if (!message.success) {
+        this.logger.error(message.error, 'Invalid EventSub message');
+        return;
+      }
+
+      this.handleWebSocketMessage(message.data);
+    });
 
     this.websocket.on('error', this.logger.error);
   }

@@ -11,6 +11,10 @@ import { AppClient } from './clients/app.client';
 import { PostgresClient } from './clients/postgres.client';
 dotenv.config();
 
+// TODO:
+// pb command is case sensitive - dont trust user input
+// +session 16 16 fails
+
 // Create clients
 const paceman = new PacemanClient('https://paceman.gg/stats/api', pinoLogger);
 const ranked = new RankedClient('https://api.mcsrranked.com', pinoLogger);
@@ -24,7 +28,7 @@ const twitchClient = new TwitchClient(pinoLogger);
 const appClient = new AppClient(mobibot, twitchClient, db, pinoLogger);
 
 // Start the bot
-(async () => {
+void (async () => {
   try {
     await appClient.start();
     console.log('Bot is running...');
