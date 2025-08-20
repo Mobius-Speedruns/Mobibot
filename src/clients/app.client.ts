@@ -208,6 +208,7 @@ export class AppClient {
         channel,
         `⚠️ Could not link Minecraft Username due to a database error.`,
       );
+      return;
     }
 
     const mcName = await this.mobibotClient.getRealNickname(userName);
