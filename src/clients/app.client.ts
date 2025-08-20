@@ -55,6 +55,8 @@ export class AppClient {
       });
     });
 
+    // Force update on nickname
+    await this.refreshLinkedChannels();
     this.logger.debug(`Bot connected to channels: ${channels.join(', ')}`);
   }
 
@@ -272,6 +274,38 @@ export class AppClient {
         channel,
         `⚠️ Could not unlink Minecraft Username due to a database error.`,
       );
+    }
+  }
+
+  private async refreshLinkedChannels() {
+    const linkedChannels = await this.db.getAllChannels();
+
+    for (const channel of linkedChannels) {
+      if (!channel.mc_name) continue;
+      try {
+        // Get the latest real nickname from your external API
+        const mcName = await this.mobibotClient.getRealNickname(
+          channel.mc_name,
+        );
+
+        if (!mcName) {
+          this.logger.warn(
+            `Could not find MC username for ${channel.name}: ${channel.mc_name}`,
+          );
+          continue;
+        }
+
+        // Upsert back into the database to update timestamp
+        await this.db.upsertChannel(channel.name, mcName);
+        this.logger.info(
+          `Refreshed MC username for ${channel.name}: ${mcName}`,
+        );
+      } catch (err) {
+        this.logger.error(
+          err,
+          `Failed to refresh MC username for ${channel.name}`,
+        );
+      }
     }
   }
 

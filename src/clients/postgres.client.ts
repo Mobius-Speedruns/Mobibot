@@ -77,6 +77,13 @@ export class PostgresClient {
     return (res.rowCount ?? 0) > 0;
   }
 
+  async getAllChannels(): Promise<Pick<ChannelRow, 'name' | 'mc_name'>[]> {
+    const res = await this.pool.query<Pick<ChannelRow, 'name' | 'mc_name'>>(
+      `SELECT name, mc_name FROM channels ORDER BY created_at ASC`,
+    );
+    return res.rows;
+  }
+
   async close() {
     await this.pool.end();
   }
