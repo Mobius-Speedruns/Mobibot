@@ -55,8 +55,6 @@ export class AppClient {
       });
     });
 
-    // Force update on nickname
-    await this.refreshLinkedChannels();
     this.logger.debug(`Bot connected to channels: ${channels.join(', ')}`);
   }
 
