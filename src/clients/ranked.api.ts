@@ -21,8 +21,6 @@ export class RankedClient {
     // Intercept player not found errors
     this.api.interceptors.response.use(
       (response) => {
-        this.logger.debug(response);
-
         return response;
       },
       (error: unknown) => {

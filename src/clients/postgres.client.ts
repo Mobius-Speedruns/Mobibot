@@ -21,7 +21,6 @@ export class PostgresClient {
       path.join(__dirname, '../../migrations/001_init.sql'),
       'utf8',
     );
-    this.logger.debug(sql);
     await this.pool.query(sql);
   }
 

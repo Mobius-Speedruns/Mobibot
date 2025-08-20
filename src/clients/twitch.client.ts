@@ -108,8 +108,6 @@ export class TwitchClient extends EventEmitter {
 
     if (response.status !== 202) {
       this.logger.error(response.data, 'Failed to subscribe:');
-    } else {
-      this.logger.info(`Subscribed to ${channelName}`);
     }
   }
 
@@ -132,7 +130,6 @@ export class TwitchClient extends EventEmitter {
       const response = await this.api.delete('helix/eventsub/subscriptions', {
         params: { id: subscription?.id },
       });
-      this.logger.debug(response);
       if (response.status === 204) {
         this.logger.info(`Unsubscribed from channel ${channelName}`);
       } else {
@@ -159,7 +156,7 @@ export class TwitchClient extends EventEmitter {
     if (response.status != 200) {
       this.logger.error(response.data, 'Failed to send chat message');
     }
-    this.logger.debug(`Sent message: ${message}`);
+    this.logger.debug(`Sent message in ${channelName}, ${message}`);
   }
 
   private async fetchToken(): Promise<string | null> {
@@ -233,6 +230,7 @@ export class TwitchClient extends EventEmitter {
   }
 
   private handleWebSocketMessage(message: EventSubMessage) {
+    this.logger.debug(message.metadata.message_type);
     // Initial connection
     if (this.isSessionWelcome(message)) {
       this.sessionId = message.payload.session.id;
@@ -244,7 +242,6 @@ export class TwitchClient extends EventEmitter {
     if (this.isNotification(message)) {
       if (message.metadata.subscription_type === 'channel.chat.message') {
         const event = message.payload.event;
-        this.logger.debug(event, 'Incoming chat message.');
 
         // Forward the message to the handler if registered
         if (this.messageHandler) {
