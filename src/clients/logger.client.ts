@@ -20,6 +20,7 @@ export const pinoLogger = pino({
     options: {
       sync: true,
       colorize: true,
+      translateTime: 'SYS:standard',
     },
   },
 });
