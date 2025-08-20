@@ -201,6 +201,7 @@ export class AppClient {
           channel,
           `⚠️ You must !subscribe first before linking.`,
         );
+        return;
       }
     } catch {
       await this.client.send(
