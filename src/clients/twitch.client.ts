@@ -165,26 +165,24 @@ export class TwitchClient extends EventEmitter {
   private async fetchToken() {
     const now = Date.now();
     // If token is still valid, return it
-    if (this.oauthToken && now < this.oauthExpires) {
+    if (this.oauthToken && now < this.oauthExpires - 5000) {
       return this.oauthToken;
     }
     return await this.refreshAccessToken();
   }
 
   private async refreshAccessToken() {
+    this.logger.info('refreshing token');
     try {
-      const response = await this.authApi.post<AuthResponse>(
-        'token',
-        new URLSearchParams({
-          grant_type: 'refresh_token',
+      const response = await this.authApi.post<AuthResponse>('token', {
+        params: {
+          rant_type: 'refresh_token',
           refresh_token: this.oauthRefreshToken,
           client_id: this.clientId,
           client_secret: this.clientSecret,
-        }).toString(),
-        {
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         },
-      );
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      });
 
       const data = response.data;
 
