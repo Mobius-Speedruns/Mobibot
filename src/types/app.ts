@@ -1,5 +1,3 @@
-export const HQ_CHANNEL = 'mobiusspeedruns';
-
 export enum Service {
   PACEMAN = '[PACEMAN]',
   MOBIBOT = '[MOBIBOT]',
@@ -35,3 +33,5 @@ export enum BotCommand {
   COMMANDS = 'commands',
   TODAY = 'today',
 }
+
+export const INTEGER_REGEX = /^-?\d+$/;

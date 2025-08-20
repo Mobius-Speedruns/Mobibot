@@ -11,9 +11,6 @@ import { AppClient } from './clients/app.client';
 import { PostgresClient } from './clients/postgres.client';
 dotenv.config();
 
-// TODO:
-// +session 16 16 fails
-
 // Create clients
 const paceman = new PacemanClient('https://paceman.gg/stats/api', pinoLogger);
 const ranked = new RankedClient('https://api.mcsrranked.com', pinoLogger);

@@ -4,9 +4,9 @@ import { Logger as PinoLogger } from 'pino';
 import {
   Service,
   BotCommand,
-  HQ_CHANNEL,
   HOURS_BETWEEN,
   HOURS,
+  INTEGER_REGEX,
 } from '../types/app';
 import { SplitName } from '../types/paceman';
 import { TwitchClient } from './twitch.client';
@@ -130,7 +130,7 @@ export class AppClient {
   private async unsubscribe(requester: string, channel: string) {
     const chanName = requester.toLowerCase();
 
-    if (chanName === HQ_CHANNEL) {
+    if (chanName === process.env.HQ_TWITCH) {
       await this.client.send(channel, `⚠️ Cannot unsubscribe from HQ channel.`);
       return;
     }
@@ -399,8 +399,13 @@ export class AppClient {
 
     let mcName: string | null;
     if (isPlus) {
-      mcName = args[0];
-      if (!mcName) {
+      const maybeName = args[0];
+
+      if (maybeName && isNaN(Number(maybeName))) {
+        // Assume name is real.
+        mcName = maybeName;
+        args.slice(1); // remove name from args
+      } else {
         // Attempt to find subscription
         const subscribed_mcName = await this.db.getMcName(username);
         if (!subscribed_mcName) {
@@ -410,11 +415,8 @@ export class AppClient {
           );
           return;
         }
-        // Safe to use subscribed_mcName
         mcName = subscribed_mcName;
       }
-      // Remove name from args
-      args.shift();
     } else {
       const chanName = channel.replace('#', '');
       mcName = await this.db.getMcName(chanName);
@@ -427,6 +429,9 @@ export class AppClient {
       }
     }
 
+    // Validate args are integers
+    const validArgs = args.filter((a) => INTEGER_REGEX.test(a));
+
     try {
       if (!mcName) {
         this.logger.warn(
@@ -434,7 +439,7 @@ export class AppClient {
         );
         return;
       }
-      await this.handleCommand(channel, cmd, mcName, args);
+      await this.handleCommand(channel, cmd, mcName, validArgs);
       return;
     } catch (err) {
       this.logger.error(err);
