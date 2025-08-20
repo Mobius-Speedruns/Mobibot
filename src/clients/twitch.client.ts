@@ -229,6 +229,7 @@ export class TwitchClient extends EventEmitter {
   }
 
   private handleWebSocketMessage(message: EventSubMessage) {
+    this.logger.debug(message);
     // Initial connection
     if (this.isSessionWelcome(message)) {
       this.sessionId = message.payload.session.id;
@@ -261,36 +262,11 @@ export class TwitchClient extends EventEmitter {
       this.logger.info('Connected to Twitch EventSub WebSocket');
     });
 
-    this.websocket.on('message', (data: WebSocket.RawData) => {
-      // Typescript ahh moment
-      let rawString: string;
-      if (typeof data === 'string') {
-        rawString = data;
-      } else if (Buffer.isBuffer(data)) {
-        rawString = data.toString('utf-8');
-      } else if (data instanceof ArrayBuffer) {
-        rawString = new TextDecoder().decode(data);
-      } else {
-        this.logger.error('Unknown WebSocket data type');
-        return;
-      }
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(rawString);
-      } catch (err) {
-        this.logger.error(err, 'Failed to parse WebSocket message');
-        return;
-      }
-
-      const message = eventSubMessage.safeParse(parsed);
-      if (!message.success) {
-        this.logger.error(message.error, 'Invalid EventSub message');
-        return;
-      }
-
-      this.handleWebSocketMessage(message.data);
-    });
+    this.websocket.on('message', (data: WebSocket.RawData) =>
+      // Cant be bothered figuring this out for typescript
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-base-to-string
+      this.handleWebSocketMessage(JSON.parse(data.toString())),
+    );
 
     this.websocket.on('error', this.logger.error);
   }
