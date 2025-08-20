@@ -12,7 +12,6 @@ import { PostgresClient } from './clients/postgres.client';
 dotenv.config();
 
 // TODO:
-// pb command is case sensitive - dont trust user input
 // +session 16 16 fails
 
 // Create clients

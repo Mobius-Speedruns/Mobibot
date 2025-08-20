@@ -37,6 +37,14 @@ export class MobibotClient {
     this.lastmatch = handleNotFound(this.lastmatch);
   }
 
+  // Helper function to convert user-inputs into real MCSR name
+  async getRealNickname(name: string): Promise<string | null> {
+    const recentRun = await this.paceman.getRecentRuns(name, 1);
+    if (recentRun.length === 0) return null;
+    const worldId = await this.paceman.getWorld(recentRun[0].id);
+    return worldId.data.nickname;
+  }
+
   async session(
     name: string,
     hours?: number,
@@ -106,7 +114,13 @@ export class MobibotClient {
     return sections.join(' \u2756 ');
   }
   async pb(names: string): Promise<string> {
-    const pbs = await this.paceman.getPBs(names);
+    // PB endpoint is case sensitive. Attempt to retrieve first
+    const mcName = await this.getRealNickname(names);
+    if (!mcName) {
+      return `⚠️ Player not found in paceman.`;
+    }
+
+    const pbs = await this.paceman.getPBs(mcName);
     if (!pbs) return 'Unable to fetch pbs, try again later';
     const response = pbs
       .map(
@@ -114,7 +128,7 @@ export class MobibotClient {
           `${appendInvisibleChars(pb.name)} \u2756 ${pb.pb} (${getRelativeTimeFromTimestamp(pb.timestamp)} ago)`,
       )
       .join(' ');
-    if (!response) return 'No pb found, or player not found!';
+    if (!response) return '⚠️ No pb found!';
     return response;
   }
   async resets(

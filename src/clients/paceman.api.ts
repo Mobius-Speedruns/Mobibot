@@ -5,13 +5,13 @@ import {
   Session,
   sessionSchema,
   recentRunSchema,
-  Run,
-  runSchema,
   NPH,
   nphSchema,
   RecentRuns,
   pbSchema,
   PB,
+  World,
+  worldSchema,
 } from '../types/paceman';
 import { Service } from '../types/app';
 
@@ -37,15 +37,15 @@ export class PacemanClient {
     );
   }
 
-  async getWorld(id: number): Promise<Run> {
+  async getWorld(id: number): Promise<World> {
     this.logger.debug(`Handling /getWorld ${id}`);
-    const { data } = await this.api.get<Run>('/getWorld', {
+    const { data } = await this.api.get<World>('/getWorld', {
       params: {
         worldId: id,
       },
     });
 
-    const parsedData = runSchema.parse(data);
+    const parsedData = worldSchema.parse(data);
     if (!parsedData) {
       this.logger.error(data, 'Invalid response from getWorld');
       throw new Error('Invalid response from getWorld');

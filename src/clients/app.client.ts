@@ -82,13 +82,19 @@ export class AppClient {
   // -----------------------------
   private async subscribe(requester: string, channel: string, message: string) {
     const chanName = requester.toLowerCase();
-    const mcName = message.split(' ')[1];
+    const userName = message.split(' ')[1];
 
-    if (!mcName) {
+    if (!userName) {
       await this.client.send(
         channel,
         `⚠️ Please provide your Minecraft Username.`,
       );
+      return;
+    }
+
+    const mcName = await this.mobibotClient.getRealNickname(userName);
+    if (!mcName) {
+      await this.client.send(channel, `⚠️ Player not found in paceman.`);
       return;
     }
 
@@ -174,9 +180,9 @@ export class AppClient {
 
   private async link(requester: string, channel: string, message: string) {
     const chanName = requester.toLowerCase();
-    const mcName = message.split(' ')[1];
+    const userName = message.split(' ')[1];
 
-    if (!mcName) {
+    if (!userName) {
       await this.client.send(
         channel,
         `⚠️ Please provide your Minecraft Username.`,
@@ -203,6 +209,11 @@ export class AppClient {
       );
     }
 
+    const mcName = await this.mobibotClient.getRealNickname(userName);
+    if (!mcName) {
+      await this.client.send(channel, `⚠️ Player not found in paceman.`);
+      return;
+    }
     try {
       await this.db.upsertChannel(chanName, mcName);
       await this.client.send(

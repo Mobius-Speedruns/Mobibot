@@ -229,7 +229,6 @@ export class TwitchClient extends EventEmitter {
   }
 
   private handleWebSocketMessage(message: EventSubMessage) {
-    this.logger.debug(message);
     // Initial connection
     if (this.isSessionWelcome(message)) {
       this.sessionId = message.payload.session.id;
