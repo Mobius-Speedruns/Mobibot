@@ -82,9 +82,16 @@ export const sessionWelcomeMessage = z.object({
   payload: sessionWelcomeEventPayload,
 });
 
+export const sessionKeepAlive = z.object({
+  metadata: baseMetadata.extend({
+    message_type: z.literal('session_keepalive'),
+  }),
+});
+
 export const eventSubMessage = z.union([
   notificationMessage,
   sessionWelcomeMessage,
+  sessionKeepAlive,
 ]);
 export type EventSubMessage = z.infer<typeof eventSubMessage>;
 

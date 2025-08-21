@@ -39,19 +39,18 @@ export class AppClient {
     await this.client.connect();
 
     const channels = await this.db.listChannels();
-    // Subscribe to each channel
-    for (const channel of channels) {
-      try {
-        await this.client.subscribe(channel);
-      } catch (err) {
-        this.logger.error(`Failed to subscribe to channel ${channel}`);
-        this.logger.error(err);
-      }
-    }
+
+    await this.connectToChannels(channels);
 
     this.client.onChatMessage((channel, tags, message) => {
       this.handleMessage(channel, tags, message).catch((err: unknown) => {
         this.logger.error(err, 'Error handling message');
+      });
+    });
+
+    this.client.onDisconnect(() => {
+      this.handleDisconnect().catch((err: unknown) => {
+        this.logger.error(err, 'Error handling disconnect');
       });
     });
 
@@ -75,6 +74,18 @@ export class AppClient {
 
     await this.db.close();
     this.logger.info('Database connection closed');
+  }
+
+  private async connectToChannels(channels: string[]): Promise<void> {
+    // Subscribe to each channel
+    for (const channel of channels) {
+      try {
+        await this.client.subscribe(channel);
+      } catch (err) {
+        this.logger.error(`Failed to subscribe to channel ${channel}`);
+        this.logger.error(err);
+      }
+    }
   }
 
   // -----------------------------
@@ -479,5 +490,12 @@ export class AppClient {
       this.logger.error(err);
       return;
     }
+  }
+
+  private async handleDisconnect() {
+    // Twitch disconnected, reconnect to all subscribed channels
+    const channels = await this.db.listChannels();
+    await this.connectToChannels(channels);
+    this.logger.debug(`Bot re-connected to channels: ${channels.join(', ')}`);
   }
 }

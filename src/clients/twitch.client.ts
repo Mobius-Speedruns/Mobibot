@@ -20,6 +20,7 @@ export class TwitchClient extends EventEmitter {
   private authApi: AxiosInstance;
   private api: AxiosInstance;
   private messageHandler?: ChatMessageHandler;
+  private disconnectHandler?: () => void;
   private logger: PinoLogger;
 
   private websocket?: WebSocket;
@@ -144,6 +145,10 @@ export class TwitchClient extends EventEmitter {
     this.messageHandler = handler;
   }
 
+  onDisconnect(handler: () => void) {
+    this.disconnectHandler = handler;
+  }
+
   async send(channelName: string, message: string): Promise<void> {
     const channelId = await this.fetchChannelId(channelName);
     const response = await this.api.post('helix/chat/messages', {
@@ -235,6 +240,7 @@ export class TwitchClient extends EventEmitter {
       this.sessionId = message.payload.session.id;
       this.logger.info(`WebSocket session initialized: ${this.sessionId}`);
       if (this.readyResolve) this.readyResolve(); // Resolve connect()
+      return;
     }
 
     // Incoming chat messages
@@ -251,10 +257,18 @@ export class TwitchClient extends EventEmitter {
           );
         }
       }
-    } else {
-      // Log this entire message - don't know how to handle it
-      this.logger.debug(message, 'Unhandled Message');
+      return;
     }
+
+    if (message.metadata.message_type === 'session_keepalive') return;
+    // Log this entire message - don't know how to handle it
+    this.logger.debug(message, 'Unhandled Message');
+    // Assume twitch is disconnecting
+    if (this.disconnectHandler) {
+      this.disconnectHandler();
+    }
+
+    return;
   }
 
   private startWebSocket() {
