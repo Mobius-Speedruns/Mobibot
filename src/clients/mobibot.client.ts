@@ -274,7 +274,7 @@ export class MobibotClient {
       'https://seedwave.vercel.app/api/seedwave',
     );
 
-    return `Seedwave: ${data.seedwave} ${data.isBloodseed ? '🩸' : ''}`;
+    return `Seedwave: ${data.seedwave} ${data.isBloodseed ? '🩸 ' : ''} https://seedwave.vercel.app/current.html`;
   }
   // TODO: record/vs command.
 }
