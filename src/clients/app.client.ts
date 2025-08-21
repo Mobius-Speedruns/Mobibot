@@ -397,6 +397,9 @@ export class AppClient {
       case BotCommand.TODAY:
         response = await this.mobibotClient.today(mcName);
         break;
+      case BotCommand.SEEDWAVE:
+        response = await this.mobibotClient.seedwave();
+        break;
       default:
         // Do nothing on unknown commands.
         return;

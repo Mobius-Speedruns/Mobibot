@@ -2,7 +2,7 @@
 import { Logger as PinoLogger } from 'pino';
 import { PacemanClient } from './paceman.api';
 import { SplitName } from '../types/paceman';
-import { Service } from '../types/app';
+import { Seedwave, Service } from '../types/app';
 import {
   getRelativeTime,
   getRelativeTimeFromTimestamp,
@@ -12,6 +12,7 @@ import { RankedClient } from './ranked.api';
 import { handleNotFound } from '../util/handleNotFound';
 import { appendInvisibleChars } from '../util/appendInvisibleChars';
 import { isTodayUTC } from '../util/isTodayUTC';
+import axios from 'axios';
 
 export class MobibotClient {
   private paceman: PacemanClient;
@@ -266,6 +267,14 @@ export class MobibotClient {
     ].filter(Boolean); // remove empty sections
 
     return sections.join(' \u2756 ');
+  }
+
+  async seedwave(): Promise<string> {
+    const { data } = await axios.get<Seedwave>(
+      'https://seedwave.vercel.app/api/seedwave',
+    );
+
+    return `Seedwave: ${data.seedwave} ${data.isBloodseed ? '🩸' : ''}`;
   }
   // TODO: record/vs command.
 }

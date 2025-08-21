@@ -1,3 +1,5 @@
+import z from 'zod';
+
 export enum Service {
   PACEMAN = '[PACEMAN]',
   MOBIBOT = '[MOBIBOT]',
@@ -32,6 +34,14 @@ export enum BotCommand {
   HELP = 'help',
   COMMANDS = 'commands',
   TODAY = 'today',
+  SEEDWAVE = 'seedwave',
 }
 
 export const INTEGER_REGEX = /^-?\d+$/;
+
+export const seedwaveSchema = z.object({
+  seedwave: z.number(),
+  isBloodseed: z.boolean(),
+});
+
+export type Seedwave = z.infer<typeof seedwaveSchema>;
