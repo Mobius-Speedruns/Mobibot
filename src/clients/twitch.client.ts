@@ -9,6 +9,7 @@ import {
   sessionWelcomeMessage,
   Subscriptions,
   SubscriptionsSchema,
+  TwitchChatColor,
   UserReponse,
 } from '../types/twitch';
 import WebSocket from 'ws';
@@ -252,6 +253,9 @@ export class TwitchClient extends EventEmitter {
           );
         }
       }
+    } else {
+      // Log this entire message - don't know how to handle it
+      this.logger.debug(message, 'Unhandled Message');
     }
   }
 
