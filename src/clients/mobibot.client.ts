@@ -158,9 +158,9 @@ export class MobibotClient {
 
     const sections = [
       `${appendInvisibleChars(name)} Elo`,
-      `Elo: ${elo || 'unknown'} (Peak: ${data.seasonResult.highest}) \u2756 Rank: ${elo ? this.ranked.convertToRank(elo) : 'unknown'} (#${data.eloRank})`,
+      `Elo: ${elo || 'Unranked'} ${data.seasonResult.highest ? `(Peak: ${data.seasonResult.highest})` : ''} \u2756 Rank: ${elo ? this.ranked.convertToRank(elo) : 'Unranked'} ${data.eloRank ? `(#${data.eloRank}` : ''}`,
       `W/L: ${wins}/${losses} (${winrate.toFixed(1)}%) \u2756 Matches: ${totalMatches}`,
-      `PB: ${pb ? msToTime(pb) : 'unknown'} \u2756 Avg: ${completionAvg ? msToTime(completionAvg) : 'unknown'}`,
+      `PB: ${pb ? msToTime(pb) : 'No Completions'} \u2756 Avg: ${completionAvg ? msToTime(completionAvg) : 'Unknown'}`,
       `FF Rate: ${forfeitrate.toFixed(1)}%`,
     ].filter(Boolean); // remove empty sections
 
@@ -168,7 +168,12 @@ export class MobibotClient {
   }
   async lastmatch(name: string): Promise<string> {
     const matchData = await this.ranked.getRecentMatches(name);
+    this.logger.info(matchData);
+    if (matchData.data.length === 0 || !matchData) return `No matches yet!`;
+
     const mostRecentMatch = matchData.data[0];
+
+    if (mostRecentMatch.players.length === 0) return `No matches yet!`;
     const winner = mostRecentMatch.players.find(
       (player) => player.uuid === mostRecentMatch.result.uuid,
     );
@@ -254,9 +259,9 @@ export class MobibotClient {
 
     const sections = [
       `${appendInvisibleChars(name)} Elo`,
-      `Elo: ${elo || 'unknown'} (${eloChange > 0 ? '+' : ''}${eloChange}) (#${data.eloRank})`,
+      `Elo: ${elo || 'Unknown'} (${eloChange > 0 ? '+' : ''}${eloChange}) (#${data.eloRank})`,
       `W/D/L: ${wins}/${draws}/${losses} (${winrate.toFixed(1)}%) \u2756 Matches: ${totalMatches}`,
-      `${completionAvg ? msToTime(completionAvg) : 'unknown'} average`,
+      `${completionAvg ? msToTime(completionAvg) : 'Unknown'} average`,
       `FF Rate: ${forfeitrate.toFixed(1)}%`,
     ].filter(Boolean); // remove empty sections
 

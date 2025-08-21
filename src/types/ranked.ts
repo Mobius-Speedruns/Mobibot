@@ -52,12 +52,12 @@ export const MatchSchema = z.object({
 });
 export const SeasonResultSchema = z.object({
   last: z.object({
-    eloRate: z.number(),
+    eloRate: z.number().nullable().optional(),
     eloRank: z.number().nullable().optional(),
     phasePoint: z.number(),
   }),
-  highest: z.number(),
-  lowest: z.number(),
+  highest: z.number().nullable(),
+  lowest: z.number().nullable(),
 });
 export const StatisticsItemSchema = z.object({
   bestTime: z.object({

@@ -47,7 +47,7 @@ export class RankedClient {
     );
   }
 
-  convertToRank(elo: number): string {
+  convertToRank(elo: number | null): string {
     const BOUNDS = [
       400,
       500,
@@ -86,6 +86,7 @@ export class RankedClient {
       'Netherite',
     ] as const;
 
+    if (!elo) return 'Unranked';
     const idx = BOUNDS.findIndex((b) => elo < b);
     return LABELS[idx];
   }
