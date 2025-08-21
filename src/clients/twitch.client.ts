@@ -3,13 +3,11 @@ import { Logger as PinoLogger } from 'pino';
 import {
   AuthResponse,
   ChatMessageHandler,
-  eventSubMessage,
   EventSubMessage,
   notificationMessage,
   sessionWelcomeMessage,
   Subscriptions,
   SubscriptionsSchema,
-  TwitchChatColor,
   UserReponse,
 } from '../types/twitch';
 import WebSocket from 'ws';
