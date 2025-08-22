@@ -45,8 +45,8 @@ export const MatchSchema = z.object({
   changes: z.array(
     z.object({
       uuid: z.string(),
-      change: z.number(),
-      eloRate: z.number(),
+      change: z.number().nullable(),
+      eloRate: z.number().nullable(),
     }),
   ),
 });
