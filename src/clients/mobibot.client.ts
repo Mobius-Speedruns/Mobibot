@@ -249,7 +249,7 @@ export class MobibotClient {
 
       const playerChange = match.changes.find((c) => c.uuid === player.uuid);
       if (playerChange) {
-        eloChange += playerChange.change;
+        eloChange += playerChange.change || 0;
       }
     });
 
