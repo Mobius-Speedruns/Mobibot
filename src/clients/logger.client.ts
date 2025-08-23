@@ -13,7 +13,17 @@ export enum LOGGER_LEVEL {
   TRACE = 'trace',
 }
 
-const logFile = path.join(__dirname, '../../bot.log');
+const isDocker =
+  fs.existsSync('/.dockerenv') || process.env.DOCKER_ENV === 'true';
+const logFile = isDocker
+  ? path.join('/app/logs', 'bot.log') // Docker path
+  : path.join(__dirname, '../bot.log');
+
+// Ensure the logs directory exists
+const logDir = path.dirname(logFile);
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir, { recursive: true });
+}
 
 const prettyStream = pino.transport({
   target: 'pino-pretty',

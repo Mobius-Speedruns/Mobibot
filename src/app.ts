@@ -25,12 +25,22 @@ const twitchClient = new TwitchClient(pinoLogger);
 // Initialize your application bot
 const appClient = new AppClient(mobibot, twitchClient, db, pinoLogger);
 
-// Ensure logs also go to a file
-const logFile = path.join(__dirname, '../bot.log');
+const isDocker =
+  fs.existsSync('/.dockerenv') || process.env.DOCKER_ENV === 'true';
+const logFile = isDocker
+  ? path.join('/app/logs', 'bot.log') // Docker path
+  : path.join(__dirname, '../bot.log');
+
+// Ensure the logs directory exists
+const logDir = path.dirname(logFile);
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir, { recursive: true });
+}
+
 function logToFile(msg: string) {
   const line = `[${new Date().toISOString()}] ${msg}\n`;
   fs.appendFileSync(logFile, line);
-  pinoLogger.info(msg); // also log via pino
+  pinoLogger.info(msg);
 }
 
 async function runWithBackoff() {
