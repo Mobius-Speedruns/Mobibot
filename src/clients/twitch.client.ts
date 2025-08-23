@@ -20,7 +20,6 @@ export class TwitchClient extends EventEmitter {
   private authApi: AxiosInstance;
   private api: AxiosInstance;
   private messageHandler?: ChatMessageHandler;
-  private disconnectHandler?: () => void;
   private logger: PinoLogger;
 
   private websocket?: WebSocket;
@@ -145,10 +144,6 @@ export class TwitchClient extends EventEmitter {
     this.messageHandler = handler;
   }
 
-  onDisconnect(handler: () => void) {
-    this.disconnectHandler = handler;
-  }
-
   async send(channelName: string, message: string): Promise<void> {
     const channelId = await this.fetchChannelId(channelName);
     const response = await this.api.post('helix/chat/messages', {
@@ -263,11 +258,6 @@ export class TwitchClient extends EventEmitter {
     if (message.metadata.message_type === 'session_keepalive') return;
     // Log this entire message - don't know how to handle it
     this.logger.debug(message, 'Unhandled Message');
-    // Assume twitch is disconnecting
-    if (this.disconnectHandler) {
-      this.disconnectHandler();
-    }
-
     return;
   }
 
@@ -284,7 +274,37 @@ export class TwitchClient extends EventEmitter {
       this.handleWebSocketMessage(JSON.parse(data.toString())),
     );
 
-    this.websocket.on('error', this.logger.error);
+    // Bubble up errors instead of just logging
+    this.websocket.on('error', (error: unknown) => {
+      const msg = parseError(error);
+      this.logger.error({ msg }, 'WebSocket error');
+      this.emit('error', new Error(`Twitch WebSocket error: ${msg}`));
+    });
+
+    // Handle WebSocket close/disconnect
+    this.websocket.on('close', (code, reason) => {
+      const reasonStr = reason ? reason.toString() : 'No reason provided';
+      this.logger.error(
+        `WebSocket closed with code ${code}, reason: ${reasonStr}`,
+      );
+      this.emit(
+        'error',
+        new Error(`Twitch WebSocket closed with code ${code}: ${reasonStr}`),
+      );
+    });
+
+    // Handle unexpected response
+    this.websocket.on('unexpected-response', (request, response) => {
+      this.logger.error(
+        `WebSocket unexpected response: ${response.statusCode}`,
+      );
+      this.emit(
+        'error',
+        new Error(
+          `Twitch WebSocket unexpected response: ${response.statusCode}`,
+        ),
+      );
+    });
   }
 
   private async fetchChannelId(channelName: string): Promise<string> {

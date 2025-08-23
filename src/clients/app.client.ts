@@ -12,6 +12,7 @@ import { SplitName } from '../types/paceman';
 import { TwitchClient } from './twitch.client';
 import { PostgresClient } from './postgres.client';
 import { ChatTags } from '../types/twitch';
+import { parseError } from '../util/parseError';
 
 export class AppClient {
   private db: PostgresClient;
@@ -48,13 +49,16 @@ export class AppClient {
       });
     });
 
-    this.client.onDisconnect(() => {
-      this.handleDisconnect().catch((err: unknown) => {
-        this.logger.error(err, 'Error handling disconnect');
+    this.logger.debug(`Bot connected to channels: ${channels.join(', ')}`);
+
+    return new Promise<void>((resolve, reject) => {
+      // Set up error handling to reject the promise (triggers restart)
+      this.client.on('error', (error: unknown) => {
+        const msg = parseError(error);
+        this.logger.error(msg);
+        reject(Error(msg));
       });
     });
-
-    this.logger.debug(`Bot connected to channels: ${channels.join(', ')}`);
   }
 
   public async shutdown() {
@@ -493,12 +497,5 @@ export class AppClient {
       this.logger.error(err);
       return;
     }
-  }
-
-  private async handleDisconnect() {
-    // Twitch disconnected, reconnect to all subscribed channels
-    const channels = await this.db.listChannels();
-    await this.connectToChannels(channels);
-    this.logger.debug(`Bot re-connected to channels: ${channels.join(', ')}`);
   }
 }
