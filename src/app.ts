@@ -57,9 +57,11 @@ async function runWithBackoff() {
         `Mobibot crashed: ${err instanceof Error ? err.stack : String(err)}`,
       );
 
-      // Exponential backoff capped at 60 seconds
-      const delay = Math.min(60_000, attempt * 5000);
-      logToFile(`Restarting in ${delay / 1000}s...`);
+      // Exponential backoff for fatal errors
+      const delay = Math.min(3_600_000, Math.pow(2, attempt - 1) * 10_000); // 10s, 20s, 40s, 80s, 160s... max 1 hour
+      logToFile(
+        `Restarting in ${delay / 1000}s (${Math.round((delay / 60_000) * 10) / 10}min)...`,
+      );
       await new Promise((r) => setTimeout(r, delay));
     }
   }

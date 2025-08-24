@@ -104,3 +104,11 @@ export type ChatMessageHandler = (
   tags: ChatTags,
   message: string,
 ) => void;
+
+export const RECOVERABLE_CODES = [
+  1006, // Abnormal closure (network issues)
+  1001, // Going away (server restart)
+  1005, // No status received
+  1011, // Server error
+  4003, // Connection unused (Twitch-specific)
+];
