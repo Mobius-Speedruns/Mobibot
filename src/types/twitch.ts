@@ -82,6 +82,21 @@ export const sessionWelcomeMessage = z.object({
   payload: sessionWelcomeEventPayload,
 });
 
+export const sessionReconnectMessage = z.object({
+  metadata: baseMetadata.extend({
+    message_type: z.literal('session_reconnect'),
+  }),
+  payload: z.object({
+    session: z.object({
+      id: z.string(),
+      status: z.string(),
+      connected_at: z.string(),
+      keepalive_timeout_seconds: z.number(),
+      reconnect_url: z.string(),
+    }),
+  }),
+});
+
 export const sessionKeepAlive = z.object({
   metadata: baseMetadata.extend({
     message_type: z.literal('session_keepalive'),
@@ -92,6 +107,7 @@ export const eventSubMessage = z.union([
   notificationMessage,
   sessionWelcomeMessage,
   sessionKeepAlive,
+  sessionReconnectMessage,
 ]);
 export type EventSubMessage = z.infer<typeof eventSubMessage>;
 

@@ -6,6 +6,7 @@ import {
   EventSubMessage,
   notificationMessage,
   RECOVERABLE_CODES,
+  sessionReconnectMessage,
   sessionWelcomeMessage,
   Subscriptions,
   SubscriptionsSchema,
@@ -43,6 +44,13 @@ export class TwitchClient extends EventEmitter {
   private reconnectTimeout?: NodeJS.Timeout;
   private isReconnecting = false;
 
+  // Track active subscriptions for re-establishment
+  private activeChannels = new Set<string>();
+
+  // For handling Twitch-initiated reconnects
+  private pendingReconnectUrl?: string;
+  private reconnectWebSocket?: WebSocket;
+
   constructor(logger: PinoLogger) {
     super();
     this.botId = process.env.BOT_ID || '';
@@ -51,8 +59,6 @@ export class TwitchClient extends EventEmitter {
     this.websocketURL = 'wss://eventsub.wss.twitch.tv/ws';
     this.oauthRefreshToken = process.env.REFRESH_TOKEN || '';
     this.logger = logger.child({ Service: Service.TWITCH });
-
-    // TODO: If any environment variables are missing, throw an error.
 
     this.authApi = axios.create({
       baseURL: 'https://id.twitch.tv/oauth2',
@@ -70,9 +76,10 @@ export class TwitchClient extends EventEmitter {
     // Interceptor to inject fresh OAuth token into every request
     this.api.interceptors.request.use(async (config) => {
       const token = await this.fetchToken();
-      if (!token) return config;
-      config.headers = config.headers || {};
-      config.headers['Authorization'] = `Bearer ${token}`;
+      if (token) {
+        config.headers = config.headers || {};
+        config.headers['Authorization'] = `Bearer ${token}`;
+      }
       return config;
     });
   }
@@ -111,8 +118,12 @@ export class TwitchClient extends EventEmitter {
 
     const response = await this.api.post('helix/eventsub/subscriptions', body);
 
-    if (response.status !== 202) {
-      this.logger.error(response.data, 'Failed to subscribe:');
+    if (response.status === 202) {
+      // Track successful subscription
+      this.activeChannels.add(channelName);
+      this.logger.debug(`Successfully subscribed to channel ${channelName}`);
+    } else {
+      this.logger.warn(response.data, `Failed to subscribe to ${channelName}:`);
     }
   }
 
@@ -136,6 +147,7 @@ export class TwitchClient extends EventEmitter {
         params: { id: subscription?.id },
       });
       if (response.status === 204) {
+        this.activeChannels.delete(channelName);
         this.logger.info(`Unsubscribed from channel ${channelName}`);
       } else {
         this.logger.error(response.data, `Failed to unsubscribe:`);
@@ -234,13 +246,65 @@ export class TwitchClient extends EventEmitter {
     return msg.metadata.message_type === 'notification';
   }
 
-  private handleWebSocketMessage(message: EventSubMessage) {
+  private isReconnectMessage(
+    msg: EventSubMessage,
+  ): msg is z.infer<typeof sessionReconnectMessage> {
+    return msg.metadata.message_type === 'session_reconnect';
+  }
+
+  private async handleWebSocketMessage(message: EventSubMessage) {
     this.logger.debug(message.metadata.message_type);
+
+    // Handle Twitch-initiated reconnect
+    if (this.isReconnectMessage(message)) {
+      this.logger.info('Received reconnect message from Twitch');
+      const reconnectUrl = message.payload.session.reconnect_url; // .session?.reconnect_url;
+
+      if (reconnectUrl) {
+        this.logger.info(`Reconnecting to new URL: ${reconnectUrl}`);
+        this.handleTwitchReconnect(reconnectUrl);
+      } else {
+        this.logger.error('Reconnect message missing reconnect_url');
+      }
+      return;
+    }
+
     // Initial connection
     if (this.isSessionWelcome(message)) {
-      this.sessionId = message.payload.session.id;
+      const newSessionId = message.payload.session.id;
+
+      // If this is a reconnect WebSocket becoming the primary
+      if (
+        this.reconnectWebSocket &&
+        this.websocket !== this.reconnectWebSocket
+      ) {
+        this.logger.info(`Switching to new WebSocket session: ${newSessionId}`);
+
+        // Close old connection
+        if (this.websocket) {
+          this.websocket.removeAllListeners();
+          this.websocket.close();
+        }
+
+        // Make the reconnect websocket the primary
+        this.websocket = this.reconnectWebSocket;
+        this.reconnectWebSocket = undefined;
+
+        // Reset reconnection state
+        this.reconnectAttempts = 0;
+        this.isReconnecting = false;
+      }
+
+      this.sessionId = newSessionId;
       this.logger.info(`WebSocket session initialized: ${this.sessionId}`);
-      if (this.readyResolve) this.readyResolve(); // Resolve connect()
+
+      // Re-establish subscriptions for all active channels
+      await this.reestablishSubscriptions();
+
+      if (this.readyResolve) {
+        this.readyResolve();
+        this.readyResolve = undefined;
+      }
       return;
     }
 
@@ -264,23 +328,68 @@ export class TwitchClient extends EventEmitter {
     if (message.metadata.message_type === 'session_keepalive') return;
     // Log this entire message - don't know how to handle it
     this.logger.debug(message, 'Unhandled Message');
-    return;
+  }
+
+  private handleTwitchReconnect(reconnectUrl: string): void {
+    this.logger.info('Starting Twitch-initiated reconnect process');
+    this.websocketURL = reconnectUrl;
+    try {
+      // Close old connection
+      if (this.websocket) {
+        this.websocket.removeAllListeners();
+        this.websocket.close();
+      }
+      this.startWebSocket();
+    } catch (error) {
+      this.logger.error(error, 'Failed to create reconnect WebSocket');
+      this.reconnect();
+    }
+  }
+
+  private async reestablishSubscriptions(): Promise<void> {
+    if (this.activeChannels.size === 0) {
+      this.logger.warn('No active channels to resubscribe to');
+      return;
+    }
+
+    this.logger.info(
+      `Re-establishing ${this.activeChannels.size} subscriptions`,
+    );
+
+    // Clear the set and re-add as we successfully subscribe
+    const channelsToResubscribe = Array.from(this.activeChannels);
+    this.activeChannels.clear();
+
+    for (const channelName of channelsToResubscribe) {
+      try {
+        await this.subscribe(channelName);
+      } catch (error) {
+        this.logger.error(error, `Failed to resubscribe to ${channelName}`);
+        // Don't re-add to activeChannels if subscription failed
+      }
+    }
   }
 
   private startWebSocket() {
     this.websocket = new WebSocket(this.websocketURL);
 
     this.websocket.on('open', () => {
-      this.logger.info('Connected to Twitch EventSub WebSocket');
+      this.logger.info(
+        `Connected to Twitch EventSub WebSocket: ${this.websocketURL}`,
+      );
     });
 
-    this.websocket.on('message', (data: WebSocket.RawData) =>
-      // Cant be bothered figuring this out for typescript
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-base-to-string
-      this.handleWebSocketMessage(JSON.parse(data.toString())),
-    );
+    this.websocket.on('message', (data: WebSocket.RawData) => {
+      try {
+        // Cant be bothered figuring this out for typescript
+        // eslint-disable-next-line @typescript-eslint/no-base-to-string
+        const message = JSON.parse(data.toString()) as EventSubMessage;
+        void this.handleWebSocketMessage(message);
+      } catch (err) {
+        this.logger.error(err, 'Error parsing WebSocket message');
+      }
+    });
 
-    // Bubble up errors instead of just logging
     this.websocket.on('error', (error: unknown) => {
       const msg = parseError(error);
       this.logger.error({ msg }, 'WebSocket error');
@@ -389,9 +498,6 @@ export class TwitchClient extends EventEmitter {
     const delay = Math.min(
       30000,
       Math.pow(2, this.reconnectAttempts - 1) * 1000,
-    ); // 1s, 2s, 4s, 8s, 16s, 30s
-    this.logger.warn(
-      `Attempting to reconnect in ${delay / 1000}s... (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`,
     );
 
     this.reconnectTimeout = setTimeout(() => {
@@ -412,18 +518,12 @@ export class TwitchClient extends EventEmitter {
           // Re-validate auth and start new websocket
           await this.validateAuth();
           this.startWebSocket();
-
-          // Reset reconnect attempts on successful connection
-          this.reconnectAttempts = 0;
-          this.isReconnecting = false;
-          this.logger.info('Successfully reconnected to Twitch WebSocket');
         } catch (error: unknown) {
           this.logger.error(
             { msg: parseError(error) },
             'Reconnection attempt failed:',
           );
           this.isReconnecting = false;
-          // Try again (will increment reconnectAttempts)
           this.reconnect();
         }
       })();
