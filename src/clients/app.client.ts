@@ -53,7 +53,7 @@ export class AppClient {
       });
     });
 
-    this.logger.debug(`Mobibot connected to channels: ${channels.join(', ')}`);
+    this.logger.info(`Mobibot connected to channels: ${channels.join(', ')}`);
 
     return new Promise<void>((resolve, reject) => {
       // Set up error handling to reject the promise (triggers restart)
