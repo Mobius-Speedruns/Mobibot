@@ -4,6 +4,7 @@ import path from 'path';
 import { Logger as PinoLogger } from 'pino';
 import { Service } from '../types/app';
 import { ChannelRow, ChannelRowSchema } from '../types/postgres';
+import { parseError } from '../util/parseError';
 
 export class PostgresClient {
   private pool: Pool;
@@ -16,12 +17,64 @@ export class PostgresClient {
     });
   }
 
-  async init() {
-    const sql = fs.readFileSync(
-      path.join(__dirname, '../../migrations/001_init.sql'),
-      'utf8',
+  private async createMigrationsTable() {
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS migrations (
+        id SERIAL PRIMARY KEY,
+        filename VARCHAR(255) UNIQUE NOT NULL,
+        executed_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+  }
+
+  private async getMigrationStatus(filename: string): Promise<boolean> {
+    const result = await this.pool.query(
+      'SELECT 1 FROM migrations WHERE filename = $1',
+      [filename],
     );
-    await this.pool.query(sql);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  private async recordMigration(filename: string) {
+    await this.pool.query('INSERT INTO migrations (filename) VALUES ($1)', [
+      filename,
+    ]);
+  }
+
+  async init() {
+    // First ensure the migrations table exists
+    await this.createMigrationsTable();
+
+    // Define migrations in order
+    const migrationFiles = ['001_init.sql', '002_add_subscribed_column.sql'];
+
+    for (const file of migrationFiles) {
+      try {
+        // Check if migration already executed
+        const isExecuted = await this.getMigrationStatus(file);
+        if (isExecuted) {
+          this.logger.info(`Migration ${file} already executed, skipping`);
+          continue;
+        }
+
+        // Execute migration
+        const sql = fs.readFileSync(
+          path.join(__dirname, '../../migrations', file),
+          'utf8',
+        );
+        await this.pool.query(sql);
+
+        // Record migration was executed
+        await this.recordMigration(file);
+        this.logger.info(`Migration ${file} completed successfully`);
+      } catch (error: unknown) {
+        this.logger.error(
+          { msg: parseError(error) },
+          `Migration ${file} failed:`,
+        );
+        throw error;
+      }
+    }
   }
 
   async upsertChannel(
@@ -30,12 +83,32 @@ export class PostgresClient {
   ): Promise<ChannelRow | null> {
     const res = await this.pool.query<ChannelRow>(
       `INSERT INTO channels (name, mc_name)
-       VALUES ($1, $2)
-       ON CONFLICT (name)
-       DO UPDATE SET mc_name = EXCLUDED.mc_name
-       WHERE channels.mc_name IS DISTINCT FROM EXCLUDED.mc_name
-       RETURNING *`,
+     VALUES ($1, $2)
+     ON CONFLICT (name)
+     DO UPDATE SET 
+       mc_name = EXCLUDED.mc_name,
+       updated_at = NOW()
+     RETURNING *`,
       [name.toLowerCase(), mcName ?? null],
+    );
+    return res.rows[0];
+  }
+
+  async createChannel(
+    name: string,
+    mcName?: string,
+    subscribed: boolean = false,
+  ): Promise<ChannelRow | null> {
+    const res = await this.pool.query<ChannelRow>(
+      `INSERT INTO channels (name, mc_name, subscribed)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (name)
+       DO UPDATE SET 
+         mc_name = EXCLUDED.mc_name,
+         subscribed = EXCLUDED.subscribed,
+         updated_at = NOW()
+       RETURNING *`,
+      [name.toLowerCase(), mcName ?? null, subscribed],
     );
     return res.rows[0];
   }
@@ -61,11 +134,33 @@ export class PostgresClient {
     return ChannelRowSchema.parse(res.rows[0]);
   }
 
-  async listChannels(): Promise<string[]> {
+  async getAllChannels(): Promise<
+    Pick<ChannelRow, 'name' | 'mc_name' | 'subscribed'>[]
+  > {
+    const res = await this.pool.query<
+      Pick<ChannelRow, 'name' | 'mc_name' | 'subscribed'>
+    >(
+      `SELECT name, mc_name, subscribed  FROM channels ORDER BY created_at ASC`,
+    );
+    return res.rows;
+  }
+
+  async listSubscribedChannels(): Promise<string[]> {
     const res = await this.pool.query<Pick<ChannelRow, 'name'>>(
-      `SELECT name FROM channels ORDER BY created_at ASC`,
+      `SELECT name FROM channels WHERE subscribed = true ORDER BY created_at ASC`,
     );
     return res.rows.map((r) => r.name);
+  }
+
+  async updateSubscription(
+    channelName: string,
+    subscribed: boolean,
+  ): Promise<boolean> {
+    const res = await this.pool.query(
+      `UPDATE channels SET subscribed = $1 WHERE name = $2`,
+      [subscribed, channelName.toLowerCase()],
+    );
+    return (res.rowCount ?? 0) > 0;
   }
 
   async removeChannel(name: string): Promise<boolean> {
@@ -74,13 +169,6 @@ export class PostgresClient {
     ]);
 
     return (res.rowCount ?? 0) > 0;
-  }
-
-  async getAllChannels(): Promise<Pick<ChannelRow, 'name' | 'mc_name'>[]> {
-    const res = await this.pool.query<Pick<ChannelRow, 'name' | 'mc_name'>>(
-      `SELECT name, mc_name FROM channels ORDER BY created_at ASC`,
-    );
-    return res.rows;
   }
 
   async close() {

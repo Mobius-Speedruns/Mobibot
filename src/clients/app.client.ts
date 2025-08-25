@@ -35,11 +35,15 @@ export class AppClient {
   public async start() {
     await this.db.init();
     // Add HQ channel if not already in channels
-    await this.db.upsertChannel(process.env.HQ_TWITCH!, process.env.HQ_MC);
+    await this.db.createChannel(
+      process.env.HQ_TWITCH!,
+      process.env.HQ_MC,
+      true,
+    );
 
     await this.client.connect();
 
-    const channels = await this.db.listChannels();
+    const channels = await this.db.listSubscribedChannels();
 
     await this.connectToChannels(channels);
 
@@ -49,7 +53,7 @@ export class AppClient {
       });
     });
 
-    this.logger.debug(`Bot connected to channels: ${channels.join(', ')}`);
+    this.logger.debug(`Mobibot connected to channels: ${channels.join(', ')}`);
 
     return new Promise<void>((resolve, reject) => {
       // Set up error handling to reject the promise (triggers restart)
@@ -64,7 +68,7 @@ export class AppClient {
   public async shutdown() {
     this.logger.info('Shutting down bot, unsubscribing from all channels...');
 
-    const channels = await this.db.listChannels();
+    const channels = await this.db.listSubscribedChannels();
 
     // unsubscribe from each channel
     for (const channel of channels) {
@@ -95,81 +99,108 @@ export class AppClient {
   // -----------------------------
   // Subscriptions
   // -----------------------------
-  private async subscribe(requester: string, channel: string, message: string) {
+  private async join(requester: string, channel: string, message: string) {
     const chanName = requester.toLowerCase();
     const userName = message.split(' ')[1];
 
-    if (!userName) {
-      await this.client.send(
-        channel,
-        `⚠️ Please provide your Minecraft Username.`,
-      );
-      return;
-    }
-
-    const mcName = await this.mobibotClient.getRealNickname(userName);
-    if (!mcName) {
-      await this.client.send(channel, `⚠️ Player not found in paceman.`);
-      return;
-    }
-
-    try {
-      const channelRecord = await this.db.upsertChannel(chanName, mcName);
-
-      if (!channelRecord) {
-        await this.client.subscribe(chanName);
+    // Check for existing channel
+    const existingChannel = await this.db.getChannel(chanName);
+    if (!existingChannel) {
+      // Bail if no username provided
+      if (!userName) {
         await this.client.send(
           channel,
-          `✅ Bot subscribed to ${chanName} with Minecraft Username: ${mcName}`,
+          `⚠️ Please provide your Minecraft Username after !join.`,
         );
-      } else {
-        await this.client.send(
-          channel,
-          `⚠️ Already subscribed. Use !link to update your Minecraft Username.`,
-        );
-      }
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        this.logger.error(`Failed to subscribe ${chanName}: ${err.message}`);
-      } else {
-        this.logger.error(`Failed to subscribe ${chanName}: ${String(err)}`);
-      }
-
-      await this.client.send(
-        channel,
-        `⚠️ Could not subscribe to ${chanName} due to a database error.`,
-      );
-    }
-  }
-
-  private async unsubscribe(requester: string, channel: string) {
-    const chanName = requester.toLowerCase();
-
-    if (chanName === process.env.HQ_TWITCH) {
-      await this.client.send(channel, `⚠️ Cannot unsubscribe from HQ channel.`);
-      return;
-    }
-
-    try {
-      try {
-        await this.client.unsubscribe(chanName);
-      } catch {
-        await this.client.send(
-          channel,
-          `⚠️ Could not unsubscribe ${chanName} due to an error.`,
-        );
-        this.logger.error(`Failed to unsubscribe ${chanName}`);
         return;
       }
 
+      // Check username
+      const mcName = await this.mobibotClient.getRealNickname(userName);
+      if (!mcName) {
+        await this.client.send(channel, `⚠️ Player not found in paceman.`);
+        return;
+      }
+
+      // Add channel
+      try {
+        await this.db.createChannel(chanName, mcName, true); // Create the channel
+        await this.client.subscribe(chanName); // Subscribe to channel's chat
+        await this.client.send(
+          channel,
+          `✅ Mobibot joined ${chanName} with Minecraft Username: ${mcName}`,
+        );
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          this.logger.error(`Failed to subscribe ${chanName}: ${err.message}`);
+        } else {
+          this.logger.error(`Failed to subscribe ${chanName}: ${String(err)}`);
+        }
+
+        await this.client.send(
+          channel,
+          `⚠️ Could not join to ${chanName} due to a database error.`,
+        );
+      }
+      return;
+    }
+
+    // Channel exists, check if they are subscribed.
+    const isSubscribed = existingChannel.subscribed;
+    if (!isSubscribed) {
+      // Join channel
+      try {
+        await this.db.updateSubscription(chanName, true);
+        await this.client.send(channel, `✅ Mobibot joined ${chanName}`);
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          this.logger.error(`Failed to subscribe ${chanName}: ${err.message}`);
+        } else {
+          this.logger.error(`Failed to subscribe ${chanName}: ${String(err)}`);
+        }
+
+        await this.client.send(
+          channel,
+          `⚠️ Could not join to ${chanName} due to a database error.`,
+        );
+      }
+
+      return;
+    } else {
+      await this.client.send(
+        channel,
+        `⚠️ Already joined. Use !link to update your Minecraft Username, or !leave to remove Mobibot from your channel.`,
+      );
+      return;
+    }
+  }
+
+  private async leave(requester: string, channel: string) {
+    const chanName = requester.toLowerCase();
+
+    if (chanName === process.env.HQ_TWITCH) {
+      await this.client.send(channel, `⚠️ Cannot leave from HQ channel.`);
+      return;
+    }
+
+    try {
+      const existingChannel = await this.db.getChannel(chanName);
+      if (existingChannel?.subscribed) await this.client.unsubscribe(chanName);
+    } catch {
+      await this.client.send(
+        channel,
+        `⚠️ Could not leave ${chanName} due to an error. Please contact mobiusspeedruns.`,
+      );
+      this.logger.error(`Failed to unsubscribe ${chanName}`);
+      return;
+    }
+
+    try {
       // 2. If successful, try removing from DB
       const removed = await this.db.removeChannel(chanName);
 
       if (removed) {
-        await this.client.send(
-          channel,
-          `❌ Bot unsubscribed from ${chanName}.`,
-        );
+        await this.client.send(channel, `❌ Mobibot left ${chanName}`);
       } else {
         // rollback? re-subscribe? at least log
         this.logger.warn(
@@ -188,7 +219,7 @@ export class AppClient {
       }
       await this.client.send(
         channel,
-        `⚠️ Could not unsubscribe ${chanName} due to an error.`,
+        `⚠️ Could not leave ${chanName} due to an error.`,
       );
     }
   }
@@ -200,28 +231,7 @@ export class AppClient {
     if (!userName) {
       await this.client.send(
         channel,
-        `⚠️ Please provide your Minecraft Username.`,
-      );
-      return;
-    }
-
-    // Check if user exists
-    try {
-      const dbChannel = await this.db.getChannel(chanName);
-      if (!dbChannel) {
-        this.logger.warn(
-          `User attempted to link while unsubscribed for ${chanName}`,
-        );
-        await this.client.send(
-          channel,
-          `⚠️ You must !subscribe first before linking.`,
-        );
-        return;
-      }
-    } catch {
-      await this.client.send(
-        channel,
-        `⚠️ Could not link Minecraft Username due to a database error.`,
+        `⚠️ Please provide your Minecraft Username after !link.`,
       );
       return;
     }
@@ -231,11 +241,18 @@ export class AppClient {
       await this.client.send(channel, `⚠️ Player not found in paceman.`);
       return;
     }
+
     try {
-      await this.db.upsertChannel(chanName, mcName);
+      const row = await this.db.upsertChannel(chanName, mcName);
+
+      // Alert user about joining.
+      let joinAlert: string = '';
+      if (row?.subscribed)
+        joinAlert = '. Please use !join if you want Mobibot to join your chat';
+
       await this.client.send(
         channel,
-        `✅ Linked Minecraft Username ${mcName} for ${chanName}`,
+        `✅ Linked Minecraft Username ${mcName} to ${chanName}${joinAlert}`,
       );
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -264,15 +281,21 @@ export class AppClient {
       if (!mcUsername) {
         await this.client.send(
           channel,
-          `⚠️ No linked Minecraft Username to ${chanName}.`,
+          `⚠️ No linked Minecraft Username to ${chanName}`,
         );
         return;
       }
 
-      await this.db.upsertChannel(chanName);
+      const row = await this.db.upsertChannel(chanName);
+      // Alert user about joining.
+      let leaveAlert: string = '';
+      if (row?.subscribed)
+        leaveAlert =
+          '. Please use !leave if you want Mobibot to leave your chat';
+
       await this.client.send(
         channel,
-        `❌ Unlinked ${mcUsername} for ${chanName}`,
+        `❌ Unlinked ${mcUsername} for ${chanName}${leaveAlert}`,
       );
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -436,10 +459,10 @@ export class AppClient {
 
     // Subscription / link commands
     switch (cmd) {
-      case 'subscribe':
-        return this.subscribe(username, channel, message);
-      case 'unsubscribe':
-        return this.unsubscribe(username, channel);
+      case 'join':
+        return this.join(username, channel, message);
+      case 'leave':
+        return this.leave(username, channel);
       case 'link':
         return this.link(username, channel, message);
       case 'unlink':
@@ -463,7 +486,7 @@ export class AppClient {
         if (!subscribed_mcName) {
           await this.client.send(
             channel,
-            `⚠️ You must specify a Minecraft Username after +${cmd}`,
+            `⚠️ You must specify a Minecraft Username after +${cmd}, or use !link to link your Minecraft Username to your twitch account.`,
           );
           return;
         }
@@ -475,7 +498,7 @@ export class AppClient {
       if (!mcName) {
         await this.client.send(
           channel,
-          `⚠️ No linked Minecraft Username for this channel.`,
+          `⚠️ No linked Minecraft Username for this channel. Please link one using !link.`,
         );
         return;
       }

@@ -6,6 +6,7 @@ export const ChannelRowSchema = z.object({
   mc_name: z.string().nullable(),
   created_at: z.date(),
   updated_at: z.date(),
+  subscribed: z.boolean(),
 });
 
 export type ChannelRow = z.infer<typeof ChannelRowSchema>;
