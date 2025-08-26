@@ -455,6 +455,9 @@ export class AppClient {
       case BotCommand.WINRATE:
         response = await this.mobibotClient.winrate(mcName);
         break;
+      case BotCommand.AVERAGE:
+        response = await this.mobibotClient.average(mcName);
+        break;
       default:
         return;
     }

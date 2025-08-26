@@ -38,6 +38,7 @@ export enum BotCommand {
   VS = 'vs',
   SEEDWAVE = 'seedwave',
   WINRATE = 'winrate',
+  AVERAGE = 'average',
 }
 
 export const USERNAME_COMMANDS = [
@@ -58,6 +59,7 @@ export const USERNAME_COMMANDS = [
   BotCommand.LASTCOMPLETION,
   BotCommand.LASTFINISH,
   BotCommand.WINRATE,
+  BotCommand.AVERAGE,
 ];
 
 export const INTEGER_REGEX = /^-?\d+$/;

@@ -38,6 +38,10 @@ export class MobibotClient {
     this.resets = handleNotFound(this.resets);
     this.elo = handleNotFound(this.elo);
     this.lastmatch = handleNotFound(this.lastmatch);
+    this.today = handleNotFound(this.today);
+    this.record = handleNotFound(this.record);
+    this.winrate = handleNotFound(this.winrate);
+    this.average = handleNotFound(this.average);
   }
 
   // Helper function to convert user-inputs into real MCSR name
@@ -333,11 +337,11 @@ export class MobibotClient {
     const winsByType: WinsByType = matchData.reduce((acc, match) => {
       const seed = match.seed;
       if (!seed) return acc;
+      const isWin = match.result.uuid === uuid;
 
       // ---- Overworld ----
       if (seed.overworld) {
         acc.overworld[seed.overworld].total += 1;
-        const isWin = match.result.uuid === uuid;
         if (isWin) {
           acc.overworld[seed.overworld].wins += 1;
         }
@@ -346,7 +350,6 @@ export class MobibotClient {
       // ---- Nether ----
       if (seed.nether) {
         acc.nether[seed.nether].total += 1;
-        const isWin = match.result.uuid === uuid;
         if (isWin) {
           acc.nether[seed.nether].wins += 1;
         }
@@ -367,13 +370,100 @@ export class MobibotClient {
           ([type, { wins, total }]) =>
             `${capitalizeWords(type)}: ${wins}/${total} (${total > 0 ? ((wins / total) * 100).toFixed(1) : '0'}%)`,
         )
-        .join(' , '),
+        .join(', '),
       Object.entries(winsByType.nether)
         .map(
           ([type, { wins, total }]) =>
             `${capitalizeWords(type)}: ${wins}/${total} (${total > 0 ? ((wins / total) * 100).toFixed(1) : '0'}%)`,
         )
-        .join(' , '),
+        .join(', '),
+    ];
+    return sections.join(' \u2756 ');
+  }
+  async average(name: string): Promise<string> {
+    const [matchData, userData] = await Promise.all([
+      this.ranked.getAllMatches(name),
+      this.ranked.getUserData(name),
+    ]);
+
+    if (matchData.length === 0 || !matchData) return `No matches yet!`;
+    const uuid = userData.data.uuid;
+
+    // Split completions by seed type
+    type CompletionRecord = { completions: number; total: number };
+
+    type CompletionByType = {
+      overworld: Record<OVERWORLD_TYPE, CompletionRecord>;
+      nether: Record<NETHER_TYPE, CompletionRecord>;
+    };
+
+    // Start each type with 0 completions, 0 total
+    function initRecord<T extends string>(
+      values: readonly T[],
+    ): Record<T, CompletionRecord> {
+      return values.reduce(
+        (acc, v) => ({ ...acc, [v]: { completions: 0, total: 0 } }),
+        {} as Record<T, CompletionRecord>,
+      );
+    }
+
+    const initial: CompletionByType = {
+      overworld: initRecord(Object.values(OVERWORLD_TYPE)),
+      nether: initRecord(Object.values(NETHER_TYPE)),
+    };
+
+    const completionsByType: CompletionByType = matchData.reduce(
+      (acc, match) => {
+        const seed = match.seed;
+        if (!seed) return acc;
+        // No completion if the match was forfeited or lost.
+        if (match.forfeited) return acc;
+        const isWin = match.result.uuid === uuid;
+        if (!isWin) return acc;
+
+        // ---- Overworld ----
+        if (seed.overworld) {
+          acc.overworld[seed.overworld].total += 1;
+          if (isWin) {
+            acc.overworld[seed.overworld].completions += match.result.time;
+          }
+        }
+
+        // ---- Nether ----
+        if (seed.nether) {
+          acc.nether[seed.nether].total += 1;
+          const isWin = match.result.uuid === uuid;
+          if (isWin) {
+            acc.nether[seed.nether].completions += match.result.time;
+          }
+        }
+
+        return acc;
+      },
+      initial,
+    );
+
+    // Overall Statistics
+    const totalCompletions = userData.data.statistics.season.completions.ranked;
+    const totalCompletionTime =
+      userData.data.statistics.season.completionTime.ranked;
+    const completionAvg = totalCompletionTime / totalCompletions;
+
+    const sections = [
+      `${appendInvisibleChars(userData.data.nickname)} overall average: ${completionAvg ? msToTime(completionAvg) : 'Unknown'}`,
+      `${totalCompletions} total completions`,
+      Object.entries(completionsByType.overworld)
+        .map(
+          ([type, { completions, total }]) =>
+            `${capitalizeWords(type)}: ${completions ? msToTime(completions / total) : '--'}`,
+        )
+        .join(', '),
+      Object.entries(completionsByType.nether)
+        .map(
+          ([type, { completions, total }]) =>
+            `${capitalizeWords(type)}: ${completions ? msToTime(completions / total) : '--'}`,
+        )
+        .join(', '),
     ];
     return sections.join(' \u2756 ');
   }
