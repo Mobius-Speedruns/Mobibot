@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosError, AxiosInstance } from 'axios';
 import { Logger as PinoLogger } from 'pino';
 import {
   AuthResponse,
@@ -84,8 +84,12 @@ export class TwitchClient extends EventEmitter {
     });
 
     // Interceptors to handle errors
-    const handleError = (error: any) => {
-      this.emit('error', error); // Emit an event
+    const handleError = (error: AxiosError) => {
+      // Ignore 429 - likely shared chat
+      if (error.response?.status !== 429) {
+        this.emit('apiError', error);
+      }
+      return Promise.reject(error);
     };
 
     this.authApi.interceptors.response.use((res) => res, handleError);
