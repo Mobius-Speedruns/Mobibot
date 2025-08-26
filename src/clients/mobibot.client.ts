@@ -281,6 +281,19 @@ export class MobibotClient {
 
     return sections.join(' \u2756 ');
   }
+  async record(name1: string, name2: string): Promise<string> {
+    const { data } = await this.ranked.getVersusData(name1, name2);
+    if (data.players.length != 2) {
+      this.logger.error(data, 'Invalid vs data from ranked.');
+      return '';
+    }
+    const player1 = data.players[0];
+    const player2 = data.players[1];
 
-  // TODO: record/vs command.
+    const sections = [
+      `${player1.nickname} ${data.results.ranked[player1.uuid]} - ${data.results.ranked[player2.uuid]} ${player2.nickname}`,
+      `${data.results.ranked.total} total game(s)`,
+    ];
+    return sections.join(' \u2756 ');
+  }
 }

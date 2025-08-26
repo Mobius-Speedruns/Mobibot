@@ -35,6 +35,7 @@ export enum BotCommand {
   COMMANDS = 'commands',
   TODAY = 'today',
   RECORD = 'record',
+  VS = 'vs',
   SEEDWAVE = 'seedwave',
 }
 

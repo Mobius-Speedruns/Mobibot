@@ -1,5 +1,43 @@
 import z from 'zod';
 
+export const BOUNDS = [
+  400,
+  500,
+  600,
+  700,
+  800,
+  900,
+  1000,
+  1100,
+  1200,
+  1300,
+  1400,
+  1500,
+  1650,
+  1800,
+  2000,
+  Infinity,
+] as const;
+
+export const LABELS = [
+  'Coal I',
+  'Coal II',
+  'Coal III',
+  'Iron I',
+  'Iron II',
+  'Iron III',
+  'Gold I',
+  'Gold II',
+  'Gold III',
+  'Emerald I',
+  'Emerald II',
+  'Emerald III',
+  'Diamond I',
+  'Diamond II',
+  'Diamond III',
+  'Netherite',
+] as const;
+
 export enum MatchType {
   'Casual Match',
   'Ranked Match',
@@ -116,8 +154,22 @@ export const MatchesResponseSchema = z.object({
   status: z.string(),
   data: z.array(MatchSchema),
 });
+export const VSResponseSchema = z.object({
+  status: z.string(),
+  data: z.object({
+    players: z.array(UserProfileSchema),
+    results: z.object({
+      ranked: z
+        .object({
+          total: z.number(),
+        })
+        .and(z.record(z.string(), z.number())),
+    }),
+  }),
+});
 
 export type UserProfile = z.infer<typeof UserProfileSchema>;
 export type Match = z.infer<typeof MatchSchema>;
 export type GetUserDataResponse = z.infer<typeof GetUserDataResponseSchema>;
 export type MatchesResponse = z.infer<typeof MatchesResponseSchema>;
+export type VSResponse = z.infer<typeof VSResponseSchema>;

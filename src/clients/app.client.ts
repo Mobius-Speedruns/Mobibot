@@ -435,6 +435,23 @@ export class AppClient {
       case BotCommand.SEEDWAVE:
         response = await this.mobibotClient.seedwave();
         break;
+      case BotCommand.VS:
+      case BotCommand.RECORD: {
+        if (args.length >= 2) {
+          // Two usernames: record(args[0], args[1])
+          response = await this.mobibotClient.record(args[0], args[1]);
+        } else if (args.length >= 1) {
+          // One username: record(mcName, args[0])
+          response = await this.mobibotClient.record(mcName, args[0]);
+        } else {
+          await this.client.send(
+            channel,
+            `⚠️ Please provide at least one Minecraft Username for the record command.`,
+          );
+          return;
+        }
+        break;
+      }
       default:
         return;
     }
