@@ -46,6 +46,9 @@ export class MobibotClient {
     return worldId.data.nickname;
   }
 
+  // -----------------------------
+  // RSG
+  // -----------------------------
   async session(
     name: string,
     hours?: number,
@@ -141,6 +144,17 @@ export class MobibotClient {
 
     return `${appendInvisibleChars(name)} Reset Stats \u2756 ${resetData.totalResets} total resets \u2756 ${resetData.resets} last session`;
   }
+  async seedwave(): Promise<string> {
+    const { data } = await axios.get<Seedwave>(
+      'https://seedwave.vercel.app/api/seedwave',
+    );
+
+    return `Seedwave: ${data.seedwave} ${data.isBloodseed ? '🩸 ' : ''} https://seedwave.vercel.app/current.html`;
+  }
+
+  // -----------------------------
+  // Ranked
+  // -----------------------------
   async elo(name: string): Promise<string> {
     const userData = await this.ranked.getUserData(name);
     const data = userData.data;
@@ -169,7 +183,6 @@ export class MobibotClient {
   }
   async lastmatch(name: string): Promise<string> {
     const matchData = await this.ranked.getRecentMatches(name);
-    this.logger.info(matchData);
     if (matchData.data.length === 0 || !matchData) return `No matches yet!`;
 
     const mostRecentMatch = matchData.data[0];
@@ -269,12 +282,5 @@ export class MobibotClient {
     return sections.join(' \u2756 ');
   }
 
-  async seedwave(): Promise<string> {
-    const { data } = await axios.get<Seedwave>(
-      'https://seedwave.vercel.app/api/seedwave',
-    );
-
-    return `Seedwave: ${data.seedwave} ${data.isBloodseed ? '🩸 ' : ''} https://seedwave.vercel.app/current.html`;
-  }
   // TODO: record/vs command.
 }

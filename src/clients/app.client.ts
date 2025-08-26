@@ -7,6 +7,7 @@ import {
   HOURS_BETWEEN,
   HOURS,
   INTEGER_REGEX,
+  USERNAME_COMMANDS,
 } from '../types/app';
 import { SplitName } from '../types/paceman';
 import { TwitchClient } from './twitch.client';
@@ -357,6 +358,7 @@ export class AppClient {
     args: string[],
   ): Promise<void> {
     let response: string | void;
+
     switch (cmd.toLowerCase() as BotCommand) {
       case BotCommand.COMMANDS:
       case BotCommand.DOCS:
@@ -365,13 +367,26 @@ export class AppClient {
         response =
           'Documentation is available at https://github.com/Mobius-Speedruns/Mobibot/wiki';
         break;
-      case BotCommand.SESSION:
+      case BotCommand.SESSION: {
+        const hours = this.parseIntArg(args[0]) || HOURS;
+        const hoursBetween = this.parseIntArg(args[1]) || HOURS_BETWEEN;
         response = await this.mobibotClient.session(
           mcName,
-          Number(args[0]) || HOURS,
-          Number(args[1]) || HOURS_BETWEEN,
+          hours,
+          hoursBetween,
         );
         break;
+      }
+      case BotCommand.RESETS: {
+        const resetHours = this.parseIntArg(args[0]) || HOURS;
+        const resetHoursBetween = this.parseIntArg(args[1]) || HOURS_BETWEEN;
+        response = await this.mobibotClient.resets(
+          mcName,
+          resetHours,
+          resetHoursBetween,
+        );
+        break;
+      }
       case BotCommand.LASTENTER:
       case BotCommand.LASTNETHER:
         response = await this.mobibotClient.lastsplit(mcName, SplitName.NETHER);
@@ -405,13 +420,6 @@ export class AppClient {
       case BotCommand.LASTCOMPLETION:
         response = await this.mobibotClient.lastsplit(mcName, SplitName.FINISH);
         break;
-      case BotCommand.RESETS:
-        response = await this.mobibotClient.resets(
-          mcName,
-          Number(args[0]) || HOURS,
-          Number(args[1]) || HOURS_BETWEEN,
-        );
-        break;
       case BotCommand.PB:
         response = await this.mobibotClient.pb(mcName);
         break;
@@ -428,16 +436,72 @@ export class AppClient {
         response = await this.mobibotClient.seedwave();
         break;
       default:
-        // Do nothing on unknown commands.
         return;
     }
 
-    if (response) await this.client.send(channel, response);
+    if (response) {
+      await this.client.send(channel, response);
+    }
   }
 
   // -----------------------------
   // Message Handler
   // -----------------------------
+  private async handlePlusCommand(
+    channel: string,
+    cmd: string,
+    username: string,
+    args: string[],
+  ) {
+    let mcName: string;
+    let remainingArgs: string[];
+
+    // For + commands, some commands can take a username override as first arg
+    if (
+      USERNAME_COMMANDS.includes(cmd as BotCommand) &&
+      args.length > 0 &&
+      !INTEGER_REGEX.test(args[0])
+    ) {
+      // First arg is a username override
+      mcName = args[0];
+      remainingArgs = args.slice(1);
+    } else {
+      // Use subscribed username
+      const subscribedMcName = await this.db.getMcName(username);
+      if (!subscribedMcName) {
+        await this.client.send(
+          channel,
+          `⚠️ You must use !link to link your Minecraft Username to your twitch account before using +${cmd}.`,
+        );
+        return;
+      }
+      mcName = subscribedMcName;
+      remainingArgs = args;
+    }
+
+    await this.handleCommand(channel, cmd, mcName, remainingArgs);
+  }
+
+  private async handleBangCommand(
+    channel: string,
+    cmd: string,
+    username: string,
+    args: string[],
+  ) {
+    // For ! commands, use the channel's linked MC name
+    const chanName = channel.replace('#', '');
+    const channelMcName = await this.db.getMcName(chanName);
+    if (!channelMcName) {
+      await this.client.send(
+        channel,
+        `⚠️ No linked Minecraft Username for this channel. Please link one using !link.`,
+      );
+      return;
+    }
+
+    await this.handleCommand(channel, cmd, channelMcName, args);
+  }
+
   private async handleMessage(
     channel: string,
     tags: ChatTags,
@@ -472,53 +536,19 @@ export class AppClient {
     // Don't process if it is not a valid mobibot command.
     if (!Object.values(BotCommand).includes(cmd as BotCommand)) return;
 
-    let mcName: string | null;
-    if (isPlus) {
-      const maybeName = args[0];
-
-      if (maybeName && isNaN(Number(maybeName))) {
-        // Assume name is real.
-        mcName = maybeName;
-        args.slice(1); // remove name from args
-      } else {
-        // Attempt to find subscription
-        const subscribed_mcName = await this.db.getMcName(username);
-        if (!subscribed_mcName) {
-          await this.client.send(
-            channel,
-            `⚠️ You must specify a Minecraft Username after +${cmd}, or use !link to link your Minecraft Username to your twitch account.`,
-          );
-          return;
-        }
-        mcName = subscribed_mcName;
-      }
-    } else {
-      const chanName = channel.replace('#', '');
-      mcName = await this.db.getMcName(chanName);
-      if (!mcName) {
-        await this.client.send(
-          channel,
-          `⚠️ No linked Minecraft Username for this channel. Please link one using !link.`,
-        );
-        return;
-      }
-    }
-
-    // Validate args are integers
-    const validArgs = args.filter((a) => INTEGER_REGEX.test(a));
-
     try {
-      if (!mcName) {
-        this.logger.warn(
-          `Something went wrong while processing ${channel}.${cmd}, missing name!`,
-        );
-        return;
+      if (isPlus) {
+        await this.handlePlusCommand(channel, cmd, username, args);
+      } else {
+        await this.handleBangCommand(channel, cmd, username, args);
       }
-      await this.handleCommand(channel, cmd, mcName, validArgs);
-      return;
     } catch (err) {
       this.logger.error(err);
-      return;
     }
+  }
+
+  private parseIntArg(arg: string): number | null {
+    if (!arg || !INTEGER_REGEX.test(arg)) return null;
+    return Number(arg);
   }
 }
