@@ -99,4 +99,41 @@ export class RankedClient {
 
     return parsedData;
   }
+
+  async getAllMatches(name: string): Promise<MatchesResponse['data']> {
+    this.logger.debug(`Handling getAllMatches ${name}`);
+
+    let all: MatchesResponse['data'] = [];
+    let cursor: number | undefined = undefined;
+    let moreRunsAvailable = true;
+
+    while (moreRunsAvailable) {
+      const params: Record<string, string | number> = {
+        count: 100,
+        sort: 'newest',
+      };
+      if (cursor !== undefined) params.before = cursor;
+
+      const { data } = await this.api.get<MatchesResponse>(
+        `/users/${name}/matches`,
+        { params },
+      );
+
+      const parsedData = MatchesResponseSchema.parse(data);
+      if (!parsedData) {
+        this.logger.error(data, 'Invalid response from getAllMatches');
+        throw new Error('Invalid response from getAllMatches');
+      }
+
+      const matches = parsedData.data;
+      if (!matches || matches.length === 0) {
+        moreRunsAvailable = false;
+      } else {
+        all = all.concat(matches);
+        cursor = matches[matches.length - 1].id; // last match ID
+      }
+    }
+
+    return all;
+  }
 }

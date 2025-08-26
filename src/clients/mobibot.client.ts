@@ -13,6 +13,8 @@ import { handleNotFound } from '../util/handleNotFound';
 import { appendInvisibleChars } from '../util/appendInvisibleChars';
 import { isTodayUTC } from '../util/isTodayUTC';
 import axios from 'axios';
+import { NETHER_TYPE, OVERWORLD_TYPE } from '../types/ranked';
+import { capitalizeWords } from '../util/capitalizeWords';
 
 export class MobibotClient {
   private paceman: PacemanClient;
@@ -293,6 +295,85 @@ export class MobibotClient {
     const sections = [
       `${player1.nickname} ${data.results.ranked[player1.uuid]} - ${data.results.ranked[player2.uuid]} ${player2.nickname}`,
       `${data.results.ranked.total} total game(s)`,
+    ];
+    return sections.join(' \u2756 ');
+  }
+  async winrate(name: string): Promise<string> {
+    const [matchData, userData] = await Promise.all([
+      this.ranked.getAllMatches(name),
+      this.ranked.getUserData(name),
+    ]);
+
+    if (matchData.length === 0 || !matchData) return `No matches yet!`;
+    const uuid = userData.data.uuid;
+
+    // Split wins by seed type
+    type WinRecord = { wins: number; total: number };
+
+    type WinsByType = {
+      overworld: Record<OVERWORLD_TYPE, WinRecord>;
+      nether: Record<NETHER_TYPE, WinRecord>;
+    };
+
+    // Start each type with 0 wins, 0 total
+    function initRecord<T extends string>(
+      values: readonly T[],
+    ): Record<T, WinRecord> {
+      return values.reduce(
+        (acc, v) => ({ ...acc, [v]: { wins: 0, total: 0 } }),
+        {} as Record<T, WinRecord>,
+      );
+    }
+
+    const initial: WinsByType = {
+      overworld: initRecord(Object.values(OVERWORLD_TYPE)),
+      nether: initRecord(Object.values(NETHER_TYPE)),
+    };
+
+    const winsByType: WinsByType = matchData.reduce((acc, match) => {
+      const seed = match.seed;
+      if (!seed) return acc;
+
+      // ---- Overworld ----
+      if (seed.overworld) {
+        acc.overworld[seed.overworld].total += 1;
+        const isWin = match.result.uuid === uuid;
+        if (isWin) {
+          acc.overworld[seed.overworld].wins += 1;
+        }
+      }
+
+      // ---- Nether ----
+      if (seed.nether) {
+        acc.nether[seed.nether].total += 1;
+        const isWin = match.result.uuid === uuid;
+        if (isWin) {
+          acc.nether[seed.nether].wins += 1;
+        }
+      }
+
+      return acc;
+    }, initial);
+
+    // Overall Statistics
+    const totalWins = userData.data.statistics.season.wins.ranked;
+    const totalMatches = userData.data.statistics.season.playedMatches.ranked;
+    const totalWinrate = (totalWins / totalMatches) * 100;
+
+    const sections = [
+      `${appendInvisibleChars(userData.data.nickname)} overall winrate: ${totalWins}/${totalMatches} (${totalWinrate.toFixed(1)}%)`,
+      Object.entries(winsByType.overworld)
+        .map(
+          ([type, { wins, total }]) =>
+            `${capitalizeWords(type)}: ${wins}/${total} (${total > 0 ? ((wins / total) * 100).toFixed(1) : '0'}%)`,
+        )
+        .join(' , '),
+      Object.entries(winsByType.nether)
+        .map(
+          ([type, { wins, total }]) =>
+            `${capitalizeWords(type)}: ${wins}/${total} (${total > 0 ? ((wins / total) * 100).toFixed(1) : '0'}%)`,
+        )
+        .join(' , '),
     ];
     return sections.join(' \u2756 ');
   }

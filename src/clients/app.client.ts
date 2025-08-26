@@ -452,6 +452,9 @@ export class AppClient {
         }
         break;
       }
+      case BotCommand.WINRATE:
+        response = await this.mobibotClient.winrate(mcName);
+        break;
       default:
         return;
     }

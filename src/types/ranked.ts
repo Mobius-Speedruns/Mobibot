@@ -45,6 +45,21 @@ export enum MatchType {
   'Event Mode Match',
 }
 
+export enum OVERWORLD_TYPE {
+  VILLAGE = 'VILLAGE',
+  RUINED_PORTAL = 'RUINED_PORTAL',
+  SHIPWRECK = 'SHIPWRECK',
+  DESERT_TEMPLE = 'DESERT_TEMPLE',
+  BURIED_TREASURE = 'BURIED_TREASURE',
+}
+
+export enum NETHER_TYPE {
+  HOUSING = 'HOUSING',
+  BRIDGE = 'BRIDGE',
+  TREASURE = 'TREASURE',
+  STABLES = 'STABLES',
+}
+
 export const PLAYER_NOT_FOUND_MESSAGES = [
   'User is not exists.',
   'This player is not exist.',
@@ -65,8 +80,8 @@ export const UserProfileSchema = z.object({
 });
 export const MatchSeedSchema = z.object({
   id: z.string(),
-  overworld: z.string().optional().nullable(),
-  nether: z.string().optional().nullable(),
+  overworld: z.enum(OVERWORLD_TYPE).optional().nullable(),
+  nether: z.enum(NETHER_TYPE).optional().nullable(),
 });
 export const MatchSchema = z.object({
   id: z.number(),
