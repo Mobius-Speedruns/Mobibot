@@ -82,6 +82,14 @@ export class TwitchClient extends EventEmitter {
       }
       return config;
     });
+
+    // Interceptors to handle errors
+    const handleError = (error: any) => {
+      this.emit('error', error); // Emit an event
+    };
+
+    this.authApi.interceptors.response.use((res) => res, handleError);
+    this.api.interceptors.response.use((res) => res, handleError);
   }
 
   async connect() {
