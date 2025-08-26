@@ -41,27 +41,6 @@ export enum BotCommand {
   AVERAGE = 'average',
 }
 
-export const USERNAME_COMMANDS = [
-  BotCommand.SESSION,
-  BotCommand.PB,
-  BotCommand.ELO,
-  BotCommand.TODAY,
-  BotCommand.RESETS,
-  BotCommand.LASTMATCH,
-  BotCommand.LASTPACE,
-  BotCommand.LASTNETHER,
-  BotCommand.LASTENTER,
-  BotCommand.LASTBASTION,
-  BotCommand.LASTFORT,
-  BotCommand.LASTBLIND,
-  BotCommand.LASTSTRONGHOLD,
-  BotCommand.LASTEND,
-  BotCommand.LASTCOMPLETION,
-  BotCommand.LASTFINISH,
-  BotCommand.WINRATE,
-  BotCommand.AVERAGE,
-];
-
 export const INTEGER_REGEX = /^-?\d+$/;
 
 export const seedwaveSchema = z.object({

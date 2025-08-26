@@ -7,7 +7,6 @@ import {
   HOURS_BETWEEN,
   HOURS,
   INTEGER_REGEX,
-  USERNAME_COMMANDS,
 } from '../types/app';
 import { SplitName } from '../types/paceman';
 import { TwitchClient } from './twitch.client';
@@ -437,16 +436,12 @@ export class AppClient {
         break;
       case BotCommand.VS:
       case BotCommand.RECORD: {
-        if (args.length >= 2) {
-          // Two usernames: record(args[0], args[1])
-          response = await this.mobibotClient.record(args[0], args[1]);
-        } else if (args.length >= 1) {
-          // One username: record(mcName, args[0])
+        if (args.length >= 1) {
           response = await this.mobibotClient.record(mcName, args[0]);
         } else {
           await this.client.send(
             channel,
-            `⚠️ Please provide at least one Minecraft Username for the record command.`,
+            `⚠️ Please provide at least two Minecraft Usernames for the record command.`,
           );
           return;
         }
@@ -479,12 +474,7 @@ export class AppClient {
     let mcName: string;
     let remainingArgs: string[];
 
-    // For + commands, some commands can take a username override as first arg
-    if (
-      USERNAME_COMMANDS.includes(cmd as BotCommand) &&
-      args.length > 0 &&
-      !INTEGER_REGEX.test(args[0])
-    ) {
+    if (args.length > 0 && !INTEGER_REGEX.test(args[0])) {
       // First arg is a username override
       mcName = args[0];
       remainingArgs = args.slice(1);
