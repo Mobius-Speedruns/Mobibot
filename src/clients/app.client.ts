@@ -551,6 +551,8 @@ export class AppClient {
         return this.link(username, channel, message);
       case 'unlink':
         return this.unlink(username, channel);
+      case 'ping':
+        return this.client.send(channel, 'pong!');
     }
 
     // Don't process if it is not a valid mobibot command.
