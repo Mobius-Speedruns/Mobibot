@@ -9,7 +9,7 @@ import {
   INTEGER_REGEX,
   NO_ARGUMENT,
 } from '../types/app';
-import { SplitName } from '../types/paceman';
+import { Day, SplitName } from '../types/paceman';
 import { TwitchClient } from './twitch.client';
 import { PostgresClient } from './postgres.client';
 import { ChatTags } from '../types/twitch';
@@ -423,6 +423,18 @@ export class AppClient {
       case BotCommand.PB:
         response = await this.mobibotClient.pb(mcName);
         break;
+      case BotCommand.DAILY:
+        response = await this.mobibotClient.rsgLeaderboard(Day.DAILY);
+        break;
+      case BotCommand.WEEKLY:
+        response = await this.mobibotClient.rsgLeaderboard(Day.WEEKLY);
+        break;
+      case BotCommand.MONTHLY:
+        response = await this.mobibotClient.rsgLeaderboard(Day.MONTHLY);
+        break;
+      case BotCommand.ALLTIME:
+        response = await this.mobibotClient.rsgLeaderboard(Day.ALLTIME);
+        break;
       case BotCommand.ELO:
         response = await this.mobibotClient.elo(mcName);
         break;
@@ -456,7 +468,7 @@ export class AppClient {
         break;
       case BotCommand.LEADERBOARD:
       case BotCommand.LB:
-        response = await this.mobibotClient.leaderboard();
+        response = await this.mobibotClient.rankedLeaderboard();
         break;
       default:
         return;

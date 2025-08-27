@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Logger as PinoLogger } from 'pino';
 import { PacemanClient } from './paceman.api';
-import { SplitName } from '../types/paceman';
+import { Day, SplitName } from '../types/paceman';
 import { Seedwave, Service } from '../types/app';
 import {
   getRelativeTime,
@@ -157,6 +157,11 @@ export class MobibotClient {
     );
 
     return `Seedwave: ${data.seedwave} ${data.isBloodseed ? '🩸 ' : ''} https://seedwave.vercel.app/current.html`;
+  }
+  async rsgLeaderboard(days: Day): Promise<string> {
+    const leaderboard = await this.paceman.getLeaderboard(days);
+    const first = leaderboard[0];
+    return `${capitalizeWords(Day[days])} Paceman Record: ${first.name} with ${msToTime(first.value)}`;
   }
 
   // -----------------------------
@@ -468,7 +473,7 @@ export class MobibotClient {
     ];
     return sections.join(' \u2756 ');
   }
-  async leaderboard(): Promise<string> {
+  async rankedLeaderboard(): Promise<string> {
     const leaderboard = await this.ranked.getLeaderboard();
 
     // Only consider top 10

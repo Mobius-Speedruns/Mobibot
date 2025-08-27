@@ -15,6 +15,13 @@ export enum SplitName {
   FINISH = 'finish',
 }
 
+export enum Day {
+  DAILY = 1,
+  WEEKLY = 7,
+  MONTHLY = 30,
+  ALLTIME = 9999,
+}
+
 export const runSchema = z.object({
   id: z.number(),
   nether: z.number().optional(),
@@ -80,6 +87,13 @@ export const worldSchema = z.object({
   time: z.number(),
   isLive: z.boolean(),
 });
+export const leadboardSchema = z.object({
+  uuid: z.string(),
+  name: z.string(),
+  value: z.number(),
+  qty: z.number(),
+  avg: z.number(),
+});
 
 export type Run = z.infer<typeof runSchema>;
 export type RecentRuns = z.infer<typeof recentRunSchema>;
@@ -88,3 +102,4 @@ export type Session = z.infer<typeof sessionSchema>;
 export type PB = z.infer<typeof pbSchema>;
 export type User = z.infer<typeof userSchema>;
 export type World = z.infer<typeof worldSchema>;
+export type Leaderboard = z.infer<typeof leadboardSchema>;

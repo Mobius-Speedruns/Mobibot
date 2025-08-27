@@ -27,6 +27,10 @@ export enum BotCommand {
   LASTEND = 'lastend',
   LASTCOMPLETION = 'lastcompletion',
   LASTFINISH = 'lastfinish',
+  DAILY = 'daily',
+  WEEKLY = 'weekly',
+  MONTHLY = 'monthly',
+  ALLTIME = 'alltime',
   ELO = 'elo',
   LASTMATCH = 'lastmatch',
   DOCS = 'docs',
@@ -50,6 +54,10 @@ export const NO_ARGUMENT = [
   BotCommand.LEADERBOARD,
   BotCommand.LB,
   BotCommand.SEEDWAVE,
+  BotCommand.ALLTIME,
+  BotCommand.MONTHLY,
+  BotCommand.WEEKLY,
+  BotCommand.DAILY,
 ];
 
 export const INTEGER_REGEX = /^-?\d+$/;

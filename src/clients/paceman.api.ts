@@ -12,6 +12,8 @@ import {
   PB,
   World,
   worldSchema,
+  Day,
+  Leaderboard,
 } from '../types/paceman';
 import { Service } from '../types/app';
 
@@ -135,5 +137,21 @@ export class PacemanClient {
     }
 
     return parsedData;
+  }
+
+  async getLeaderboard(
+    days: Day,
+    type: string = 'fastest',
+    category: string = 'finish',
+  ): Promise<Leaderboard[]> {
+    this.logger.debug(`Handling /getLeaderboard`);
+
+    const params: Record<string, string | number> = { days, type, category };
+    this.logger.debug(params);
+    const { data } = await this.api.get<Leaderboard[]>('/getLeaderboard', {
+      params,
+    });
+
+    return data;
   }
 }
