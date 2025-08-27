@@ -13,7 +13,7 @@ import { handleNotFound } from '../util/handleNotFound';
 import { appendInvisibleChars } from '../util/appendInvisibleChars';
 import { isTodayUTC } from '../util/isTodayUTC';
 import axios from 'axios';
-import { NETHER_TYPE, OVERWORLD_TYPE } from '../types/ranked';
+import { MatchType, NETHER_TYPE, OVERWORLD_TYPE } from '../types/ranked';
 import { capitalizeWords } from '../util/capitalizeWords';
 import { getFlag } from '../util/getFlag';
 
@@ -167,8 +167,8 @@ export class MobibotClient {
   // -----------------------------
   // Ranked
   // -----------------------------
-  async elo(name: string): Promise<string> {
-    const userData = await this.ranked.getUserData(name);
+  async elo(name: string, season?: number | null): Promise<string> {
+    const userData = await this.ranked.getUserData(name, season);
     const data = userData.data;
     // Statistics
     const elo = data.eloRate;
@@ -184,17 +184,17 @@ export class MobibotClient {
     const completionAvg = totalCompletionTime / totalCompletions;
 
     const sections = [
-      `${userData.data.country ? getFlag(userData.data.country) : ''} ${appendInvisibleChars(name)} Elo`,
-      `Elo: ${elo || 'Unranked'} ${data.seasonResult.highest ? `(Peak: ${data.seasonResult.highest})` : ''} \u2756 Rank: ${elo ? this.ranked.convertToRank(elo) : 'Unranked'} ${data.eloRank ? `(#${data.eloRank}` : ''}`,
+      `${userData.data.country ? getFlag(userData.data.country) : ''} ${appendInvisibleChars(name)} ${season ? `Season ${season} ` : ''}Elo`,
+      `Elo: ${elo || 'Unranked'} ${data.seasonResult.highest ? `(Peak: ${data.seasonResult.highest})` : ''} \u2756 Rank: ${elo ? this.ranked.convertToRank(elo) : 'Unranked'} ${data.eloRank ? `(#${data.eloRank}` : ''})`,
       `W/L: ${wins}/${losses} (${winrate.toFixed(1)}%) \u2756 Matches: ${totalMatches}`,
-      `PB: ${pb ? msToTime(pb) : 'No Completions'} \u2756 Avg: ${completionAvg ? msToTime(completionAvg) : 'Unknown'}`,
+      `PB: ${pb ? msToTime(pb) : 'No Completions'} \u2756 Avg: ${completionAvg ? msToTime(completionAvg, false) : 'Unknown'}`,
       `FF Rate: ${forfeitrate.toFixed(1)}%`,
     ].filter(Boolean); // remove empty sections
 
     return sections.join(' \u2756 ');
   }
-  async lastmatch(name: string): Promise<string> {
-    const matchData = await this.ranked.getRecentMatches(name);
+  async lastmatch(name: string, season?: number | null): Promise<string> {
+    const matchData = await this.ranked.getRecentMatches(name, season);
     if (matchData.data.length === 0 || !matchData) return `No matches yet!`;
 
     const mostRecentMatch = matchData.data[0];
@@ -287,14 +287,18 @@ export class MobibotClient {
       `${userData.data.country ? getFlag(userData.data.country) : ''} ${appendInvisibleChars(name)} Elo`,
       `Elo: ${elo || 'Unknown'} (${eloChange > 0 ? '+' : ''}${eloChange}) (#${data.eloRank})`,
       `W/D/L: ${wins}/${draws}/${losses} (${winrate.toFixed(1)}%) \u2756 Matches: ${totalMatches}`,
-      `${completionAvg ? msToTime(completionAvg) : 'Unknown'} average`,
+      `${completionAvg ? msToTime(completionAvg, false) : 'Unknown'} average`,
       `FF Rate: ${forfeitrate.toFixed(1)}%`,
     ].filter(Boolean); // remove empty sections
 
     return sections.join(' \u2756 ');
   }
-  async record(name1: string, name2: string): Promise<string> {
-    const { data } = await this.ranked.getVersusData(name1, name2);
+  async record(
+    name1: string,
+    name2: string,
+    season?: number | null,
+  ): Promise<string> {
+    const { data } = await this.ranked.getVersusData(name1, name2, season);
     if (data.players.length != 2) {
       this.logger.error(data, 'Invalid vs data from ranked.');
       return '';
@@ -304,14 +308,15 @@ export class MobibotClient {
 
     const sections = [
       `${player1.country ? getFlag(player1.country) : ''} ${player1.nickname} ${data.results.ranked[player1.uuid]} - ${data.results.ranked[player2.uuid]} ${player2.nickname} ${player2.country ? getFlag(player2.country) : ''}`,
-      `${data.results.ranked.total} total game(s)`,
+      `${data.results.ranked.total} total game(s)${season ? ` in season ${season}` : ''}`,
     ];
     return sections.join(' \u2756 ');
   }
-  async winrate(name: string): Promise<string> {
+
+  async winrate(name: string, season?: number): Promise<string> {
     const [matchData, userData] = await Promise.all([
-      this.ranked.getAllMatches(name),
-      this.ranked.getUserData(name),
+      this.ranked.getAllMatches(name, season),
+      this.ranked.getUserData(name, season),
     ]);
 
     if (matchData.length === 0 || !matchData) return `No matches yet!`;
@@ -344,6 +349,8 @@ export class MobibotClient {
       const seed = match.seed;
       if (!seed) return acc;
       const isWin = match.result.uuid === uuid;
+      const isRanked = match.type === MatchType['Ranked Match'];
+      if (!isRanked) return acc;
 
       // ---- Overworld ----
       if (seed.overworld) {
@@ -370,7 +377,7 @@ export class MobibotClient {
     const totalWinrate = (totalWins / totalMatches) * 100;
 
     const sections = [
-      `${appendInvisibleChars(userData.data.nickname)} overall winrate: ${totalWins}/${totalMatches} (${totalWinrate.toFixed(1)}%)`,
+      `${appendInvisibleChars(userData.data.nickname)} ${season ? `season ${season} ` : ''}overall winrate: ${totalWins}/${totalMatches} (${totalWinrate.toFixed(1)}%)`,
       Object.entries(winsByType.overworld)
         .map(
           ([type, { wins, total }]) =>
@@ -386,10 +393,10 @@ export class MobibotClient {
     ];
     return sections.join(' \u2756 ');
   }
-  async average(name: string): Promise<string> {
+  async average(name: string, season?: number): Promise<string> {
     const [matchData, userData] = await Promise.all([
-      this.ranked.getAllMatches(name),
-      this.ranked.getUserData(name),
+      this.ranked.getAllMatches(name, season),
+      this.ranked.getUserData(name, season),
     ]);
 
     if (matchData.length === 0 || !matchData) return `No matches yet!`;
@@ -422,6 +429,8 @@ export class MobibotClient {
       (acc, match) => {
         const seed = match.seed;
         if (!seed) return acc;
+        const isRanked = match.type === MatchType['Ranked Match'];
+        if (!isRanked) return acc;
         // No completion if the match was forfeited or lost.
         if (match.forfeited) return acc;
         const isWin = match.result.uuid === uuid;
@@ -456,33 +465,40 @@ export class MobibotClient {
     const completionAvg = totalCompletionTime / totalCompletions;
 
     const sections = [
-      `${appendInvisibleChars(userData.data.nickname)} overall average: ${completionAvg ? msToTime(completionAvg) : 'Unknown'}`,
+      `${appendInvisibleChars(userData.data.nickname)} ${season ? `season ${season} ` : ''}overall average: ${completionAvg ? msToTime(completionAvg, false) : 'Unknown'}`,
       `${totalCompletions} total completions`,
       Object.entries(completionsByType.overworld)
         .map(
           ([type, { completions, total }]) =>
-            `${capitalizeWords(type)}: ${completions ? msToTime(completions / total) : '--'}`,
+            `${capitalizeWords(type)}: ${completions ? msToTime(completions / total, false) : '--'}`,
         )
         .join(', '),
       Object.entries(completionsByType.nether)
         .map(
           ([type, { completions, total }]) =>
-            `${capitalizeWords(type)}: ${completions ? msToTime(completions / total) : '--'}`,
+            `${capitalizeWords(type)}: ${completions ? msToTime(completions / total, false) : '--'}`,
         )
         .join(', '),
     ];
     return sections.join(' \u2756 ');
   }
-  async rankedLeaderboard(): Promise<string> {
-    const leaderboard = await this.ranked.getLeaderboard();
+  async rankedLeaderboard(season?: number): Promise<string> {
+    let currentSeason = season;
+    if (!season) currentSeason = await this.ranked.getCurrentSeason();
+    const leaderboard = await this.ranked.getLeaderboard(season);
 
     // Only consider top 10
     const top10 = leaderboard.data.users.slice(0, 10);
 
-    const sections = top10.map(
-      (player) =>
-        `#${player.eloRank} ${player.country ? getFlag(player.country) : ''} ${player.nickname} (${player.eloRate})`,
-    );
+    const sections = [
+      `Season ${currentSeason}`,
+      top10
+        .map(
+          (player) =>
+            `#${player.seasonResult.eloRank} ${player.country ? getFlag(player.country) : ''} ${player.nickname} (${player.seasonResult.eloRate})`,
+        )
+        .join(' '),
+    ];
 
     return sections.join(' \u2756  ');
   }

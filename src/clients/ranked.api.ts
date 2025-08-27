@@ -59,9 +59,18 @@ export class RankedClient {
     return LABELS[idx];
   }
 
-  async getUserData(name: string): Promise<GetUserDataResponse> {
-    this.logger.debug(`Handling /users/${name}`);
-    const { data } = await this.api.get<GetUserDataResponse>(`/users/${name}`);
+  async getUserData(
+    name: string,
+    season?: number | null,
+  ): Promise<GetUserDataResponse> {
+    this.logger.debug(`Handling /users/${name}, season: ${season}`);
+
+    const params: Record<string, string | number> = {};
+    if (season) params.season = season;
+
+    const { data } = await this.api.get<GetUserDataResponse>(`/users/${name}`, {
+      params,
+    });
 
     const parsedData = GetUserDataResponseSchema.parse(data);
     if (!parsedData) {
@@ -72,11 +81,18 @@ export class RankedClient {
     return parsedData;
   }
 
-  async getRecentMatches(name: string): Promise<MatchesResponse> {
-    this.logger.debug(`Handling /users/${name}/matches`);
+  async getRecentMatches(
+    name: string,
+    season?: number | null,
+  ): Promise<MatchesResponse> {
+    this.logger.debug(`Handling /users/${name}/matches, season: ${season}`);
+
+    const params: Record<string, string | number> = {};
+    if (season) params.season = season;
 
     const { data } = await this.api.get<MatchesResponse>(
       `/users/${name}/matches`,
+      { params },
     );
     const parsedData = MatchesResponseSchema.parse(data);
     if (!parsedData) {
@@ -87,11 +103,21 @@ export class RankedClient {
     return parsedData;
   }
 
-  async getVersusData(name1: string, name2: string): Promise<VSResponse> {
-    this.logger.debug(`Handling /users/${name1}/versus/${name2}`);
+  async getVersusData(
+    name1: string,
+    name2: string,
+    season?: number | null,
+  ): Promise<VSResponse> {
+    this.logger.debug(
+      `Handling /users/${name1}/versus/${name2}, season: ${season}`,
+    );
+
+    const params: Record<string, string | number> = {};
+    if (season) params.season = season;
 
     const response = await this.api.get<VSResponse>(
       `/users/${name1}/versus/${name2}`,
+      { params },
     );
     const parsedData = VSResponseSchema.parse(response.data);
     if (!parsedData) {
@@ -102,7 +128,10 @@ export class RankedClient {
     return parsedData;
   }
 
-  async getAllMatches(name: string): Promise<MatchesResponse['data']> {
+  async getAllMatches(
+    name: string,
+    season?: number,
+  ): Promise<MatchesResponse['data']> {
     this.logger.debug(`Handling getAllMatches ${name}`);
 
     let all: MatchesResponse['data'] = [];
@@ -114,6 +143,7 @@ export class RankedClient {
         count: 100,
         sort: 'newest',
       };
+      if (season) params.season = season;
       if (cursor !== undefined) params.before = cursor;
 
       const { data } = await this.api.get<MatchesResponse>(
@@ -139,9 +169,15 @@ export class RankedClient {
     return all;
   }
 
-  async getLeaderboard(): Promise<LeaderboardResponse> {
+  async getLeaderboard(season?: number): Promise<LeaderboardResponse> {
     this.logger.debug(`Handling /leaderboard`);
-    const { data } = await this.api.get<LeaderboardResponse>(`/leaderboard`);
+
+    const params: Record<string, string | number> = {};
+    if (season) params.season = season;
+
+    const { data } = await this.api.get<LeaderboardResponse>(`/leaderboard`, {
+      params,
+    });
 
     const parsedData = LeaderboardResponseSchema.parse(data);
     if (!parsedData) {
@@ -150,5 +186,19 @@ export class RankedClient {
     }
 
     return parsedData;
+  }
+
+  async getCurrentSeason(): Promise<number> {
+    this.logger.debug(`Handling /getCurrentSeason`);
+
+    const { data } = await this.api.get<LeaderboardResponse>(`/leaderboard`);
+
+    const parsedData = LeaderboardResponseSchema.parse(data);
+    if (!parsedData) {
+      this.logger.error(data, 'Invalid response from getUserData');
+      throw new Error('Invalid response from getUserData');
+    }
+
+    return parsedData.data.season.number;
   }
 }

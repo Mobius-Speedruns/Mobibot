@@ -435,9 +435,11 @@ export class AppClient {
       case BotCommand.ALLTIME:
         response = await this.mobibotClient.rsgLeaderboard(Day.ALLTIME);
         break;
-      case BotCommand.ELO:
-        response = await this.mobibotClient.elo(mcName);
+      case BotCommand.ELO: {
+        const season = this.parseIntArg(args[0]) || undefined;
+        response = await this.mobibotClient.elo(mcName, season);
         break;
+      }
       case BotCommand.LASTMATCH:
         response = await this.mobibotClient.lastmatch(mcName);
         break;
@@ -450,7 +452,8 @@ export class AppClient {
       case BotCommand.VS:
       case BotCommand.RECORD: {
         if (args.length >= 1) {
-          response = await this.mobibotClient.record(mcName, args[0]);
+          const season = this.parseIntArg(args[1]) || undefined;
+          response = await this.mobibotClient.record(mcName, args[0], season);
         } else {
           await this.client.send(
             channel,
@@ -460,16 +463,22 @@ export class AppClient {
         }
         break;
       }
-      case BotCommand.WINRATE:
-        response = await this.mobibotClient.winrate(mcName);
+      case BotCommand.WINRATE: {
+        const season = this.parseIntArg(args[0]) || undefined;
+        response = await this.mobibotClient.winrate(mcName, season);
         break;
-      case BotCommand.AVERAGE:
-        response = await this.mobibotClient.average(mcName);
+      }
+      case BotCommand.AVERAGE: {
+        const season = this.parseIntArg(args[0]) || undefined;
+        response = await this.mobibotClient.average(mcName, season);
         break;
+      }
       case BotCommand.LEADERBOARD:
-      case BotCommand.LB:
-        response = await this.mobibotClient.rankedLeaderboard();
+      case BotCommand.LB: {
+        const season = this.parseIntArg(args[0]) || undefined;
+        response = await this.mobibotClient.rankedLeaderboard(season);
         break;
+      }
       default:
         return;
     }
@@ -493,7 +502,7 @@ export class AppClient {
 
     if (NO_ARGUMENT.includes(cmd as BotCommand)) {
       mcName = '';
-      remainingArgs = [];
+      remainingArgs = args;
     } else if (args.length > 0 && !INTEGER_REGEX.test(args[0])) {
       // First arg is a username override
       mcName = args[0];

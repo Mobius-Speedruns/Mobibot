@@ -39,10 +39,10 @@ export const LABELS = [
 ] as const;
 
 export enum MatchType {
-  'Casual Match',
-  'Ranked Match',
-  'Private Room Match',
-  'Event Mode Match',
+  'Casual Match' = 1,
+  'Ranked Match' = 2,
+  'Private Room Match' = 3,
+  'Event Mode Match' = 4,
 }
 
 export enum OVERWORLD_TYPE {
@@ -190,7 +190,15 @@ export const LeaderboardResponseSchema = z.object({
       endsAt: z.number(),
       number: z.number(),
     }),
-    users: z.array(UserProfileSchema),
+    users: z.array(
+      UserProfileSchema.extend({
+        seasonResult: z.object({
+          eloRate: z.number(),
+          eloRank: z.number(),
+          phasePoint: z.number(),
+        }),
+      }),
+    ),
   }),
 });
 

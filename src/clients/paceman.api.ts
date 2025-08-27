@@ -147,7 +147,7 @@ export class PacemanClient {
     this.logger.debug(`Handling /getLeaderboard`);
 
     const params: Record<string, string | number> = { days, type, category };
-    this.logger.debug(params);
+
     const { data } = await this.api.get<Leaderboard[]>('/getLeaderboard', {
       params,
     });

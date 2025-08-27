@@ -1,4 +1,5 @@
-export function msToTime(ms: number): string {
+export function msToTime(ms: number, includeMs = true): string {
+  ms = Math.round(ms);
   const totalSeconds = Math.floor(ms / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -11,7 +12,11 @@ export function msToTime(ms: number): string {
   const secStr = String(seconds).padStart(2, '0');
   const msStr = String(milliseconds).padStart(3, '0');
 
-  return hours > 0
-    ? `${hourStr}:${minStr}:${secStr}.${msStr}`
-    : `${minStr}:${secStr}.${msStr}`;
+  if (hours > 0) {
+    return includeMs
+      ? `${hourStr}:${minStr}:${secStr}.${msStr}`
+      : `${hourStr}:${minStr}:${secStr}`;
+  } else {
+    return includeMs ? `${minStr}:${secStr}.${msStr}` : `${minStr}:${secStr}`;
+  }
 }
