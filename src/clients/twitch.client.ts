@@ -48,7 +48,6 @@ export class TwitchClient extends EventEmitter {
   private activeChannels = new Set<string>();
 
   // For handling Twitch-initiated reconnects
-  private pendingReconnectUrl?: string;
   private reconnectWebSocket?: WebSocket;
 
   constructor(logger: PinoLogger) {
@@ -98,7 +97,7 @@ export class TwitchClient extends EventEmitter {
 
   async connect() {
     await this.validateAuth();
-    this.startWebSocket();
+    this.websocket = this.startWebSocket();
 
     // Wait until the WebSocket session is ready
     return (this.readyPromise = new Promise((resolve) => {
@@ -286,16 +285,13 @@ export class TwitchClient extends EventEmitter {
       const newSessionId = message.payload.session.id;
 
       // If this is a reconnect WebSocket becoming the primary
-      if (
-        this.reconnectWebSocket &&
-        this.websocket !== this.reconnectWebSocket
-      ) {
+      if (this.reconnectWebSocket) {
         this.logger.info(`Switching to new WebSocket session: ${newSessionId}`);
 
         // Close old connection
         if (this.websocket) {
           this.websocket.removeAllListeners();
-          this.websocket.close();
+          this.websocket.close(1000);
         }
 
         // Make the reconnect websocket the primary
@@ -344,14 +340,8 @@ export class TwitchClient extends EventEmitter {
 
   private handleTwitchReconnect(reconnectUrl: string): void {
     this.logger.info('Starting Twitch-initiated reconnect process');
-    this.websocketURL = reconnectUrl;
     try {
-      // Close old connection
-      if (this.websocket) {
-        this.websocket.removeAllListeners();
-        this.websocket.close();
-      }
-      this.startWebSocket();
+      this.reconnectWebSocket = this.startWebSocket(reconnectUrl);
     } catch (error) {
       this.logger.error(error, 'Failed to create reconnect WebSocket');
       this.reconnect();
@@ -382,16 +372,15 @@ export class TwitchClient extends EventEmitter {
     }
   }
 
-  private startWebSocket() {
-    this.websocket = new WebSocket(this.websocketURL);
+  private startWebSocket(url?: string): WebSocket {
+    const wsUrl = url || this.websocketURL;
+    const ws = new WebSocket(wsUrl);
 
-    this.websocket.on('open', () => {
-      this.logger.info(
-        `Connected to Twitch EventSub WebSocket: ${this.websocketURL}`,
-      );
+    ws.on('open', () => {
+      this.logger.info(`Connected to Twitch EventSub WebSocket: ${wsUrl}`);
     });
 
-    this.websocket.on('message', (data: WebSocket.RawData) => {
+    ws.on('message', (data: WebSocket.RawData) => {
       try {
         // Cant be bothered figuring this out for typescript
         // eslint-disable-next-line @typescript-eslint/no-base-to-string
@@ -402,14 +391,14 @@ export class TwitchClient extends EventEmitter {
       }
     });
 
-    this.websocket.on('error', (error: unknown) => {
+    ws.on('error', (error: unknown) => {
       const msg = parseError(error);
       this.logger.error({ msg }, 'WebSocket error');
       this.emit('error', new Error(`Twitch WebSocket error: ${msg}`));
     });
 
     // Handle WebSocket close/disconnect
-    this.websocket.on('close', (code, reason) => {
+    ws.on('close', (code, reason) => {
       const reasonStr = reason ? reason.toString() : 'No reason provided';
 
       if (this.isReconnecting) {
@@ -421,7 +410,7 @@ export class TwitchClient extends EventEmitter {
         this.logger.warn(
           `WebSocket disconnected (recoverable) with code ${code}, reason: ${reasonStr}`,
         );
-        this.logger.info('Attempting automatic reconnection...');
+        this.logger.warn('Attempting automatic reconnection...');
 
         if (this.reconnectTimeout) {
           clearTimeout(this.reconnectTimeout);
@@ -429,6 +418,9 @@ export class TwitchClient extends EventEmitter {
 
         // Start reconnection process
         this.reconnect();
+      } else if (code === 1000) {
+        // Do nothing, connection closed intentionally.
+        return;
       } else {
         this.logger.error(
           `WebSocket closed with code ${code}, reason: ${reasonStr}`,
@@ -441,7 +433,7 @@ export class TwitchClient extends EventEmitter {
     });
 
     // Handle unexpected response
-    this.websocket.on('unexpected-response', (request, response) => {
+    ws.on('unexpected-response', (request, response) => {
       this.logger.error(
         `WebSocket unexpected response: ${response.statusCode}`,
       );
@@ -452,6 +444,8 @@ export class TwitchClient extends EventEmitter {
         ),
       );
     });
+
+    return ws;
   }
 
   private async fetchChannelId(channelName: string): Promise<string> {
@@ -523,13 +517,13 @@ export class TwitchClient extends EventEmitter {
           if (this.websocket) {
             this.websocket.removeAllListeners();
             if (this.websocket.readyState === WebSocket.OPEN) {
-              this.websocket.close();
+              this.websocket.close(1000);
             }
           }
 
           // Re-validate auth and start new websocket
           await this.validateAuth();
-          this.startWebSocket();
+          this.websocket = this.startWebSocket();
         } catch (error: unknown) {
           this.logger.error(
             { msg: parseError(error) },
