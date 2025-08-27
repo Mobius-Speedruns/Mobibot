@@ -7,6 +7,8 @@ import {
   GetUserDataResponse,
   GetUserDataResponseSchema,
   LABELS,
+  LeaderboardResponse,
+  LeaderboardResponseSchema,
   MatchesResponse,
   MatchesResponseSchema,
   PLAYER_NOT_FOUND_MESSAGES,
@@ -135,5 +137,18 @@ export class RankedClient {
     }
 
     return all;
+  }
+
+  async getLeaderboard(): Promise<LeaderboardResponse> {
+    this.logger.debug(`Handling /leaderboard`);
+    const { data } = await this.api.get<LeaderboardResponse>(`/leaderboard`);
+
+    const parsedData = LeaderboardResponseSchema.parse(data);
+    if (!parsedData) {
+      this.logger.error(data, 'Invalid response from getUserData');
+      throw new Error('Invalid response from getUserData');
+    }
+
+    return parsedData;
   }
 }

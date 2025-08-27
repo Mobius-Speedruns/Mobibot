@@ -15,6 +15,7 @@ import { isTodayUTC } from '../util/isTodayUTC';
 import axios from 'axios';
 import { NETHER_TYPE, OVERWORLD_TYPE } from '../types/ranked';
 import { capitalizeWords } from '../util/capitalizeWords';
+import { getFlag } from '../util/getFlag';
 
 export class MobibotClient {
   private paceman: PacemanClient;
@@ -178,7 +179,7 @@ export class MobibotClient {
     const completionAvg = totalCompletionTime / totalCompletions;
 
     const sections = [
-      `${appendInvisibleChars(name)} Elo`,
+      `${userData.data.country ? getFlag(userData.data.country) : ''} ${appendInvisibleChars(name)} Elo`,
       `Elo: ${elo || 'Unranked'} ${data.seasonResult.highest ? `(Peak: ${data.seasonResult.highest})` : ''} \u2756 Rank: ${elo ? this.ranked.convertToRank(elo) : 'Unranked'} ${data.eloRank ? `(#${data.eloRank}` : ''}`,
       `W/L: ${wins}/${losses} (${winrate.toFixed(1)}%) \u2756 Matches: ${totalMatches}`,
       `PB: ${pb ? msToTime(pb) : 'No Completions'} \u2756 Avg: ${completionAvg ? msToTime(completionAvg) : 'Unknown'}`,
@@ -212,7 +213,7 @@ export class MobibotClient {
       : `(${msToTime(mostRecentMatch.result.time)})`;
 
     const sections = [
-      `Players: #${player1.eloRank} ${appendInvisibleChars(player1.nickname)} (${player1.eloRate}) VS #${player2.eloRank} ${appendInvisibleChars(player2.nickname)} (${player2.eloRate})`,
+      `#${player1.eloRank} ${player1.country ? getFlag(player1.country) : ''} ${appendInvisibleChars(player1.nickname)} (${player1.eloRate}) VS #${player2.eloRank} ${player2.country ? getFlag(player2.country) : ''} ${appendInvisibleChars(player2.nickname)} (${player2.eloRate})`,
       `Winner: ${appendInvisibleChars(winner?.nickname || '')} ` + matchTime,
       `Elo Change: ${appendInvisibleChars(player1.nickname)} ${player1Changes?.change && player1Changes.change > 0 ? '+' : ''}${player1Changes?.change} » ${player1Changes?.eloRate} \u2756 ${appendInvisibleChars(player2.nickname)} ${player2Changes?.change && player2Changes.change > 0 ? '+' : ''}${player2Changes?.change} » ${player2Changes?.eloRate}`,
       `Seed Type: ${mostRecentMatch.seed?.overworld} » ${mostRecentMatch.seed?.nether}`,
@@ -278,7 +279,7 @@ export class MobibotClient {
     const completionAvg = totalCompletionTime / completions;
 
     const sections = [
-      `${appendInvisibleChars(name)} Elo`,
+      `${userData.data.country ? getFlag(userData.data.country) : ''} ${appendInvisibleChars(name)} Elo`,
       `Elo: ${elo || 'Unknown'} (${eloChange > 0 ? '+' : ''}${eloChange}) (#${data.eloRank})`,
       `W/D/L: ${wins}/${draws}/${losses} (${winrate.toFixed(1)}%) \u2756 Matches: ${totalMatches}`,
       `${completionAvg ? msToTime(completionAvg) : 'Unknown'} average`,
@@ -297,7 +298,7 @@ export class MobibotClient {
     const player2 = data.players[1];
 
     const sections = [
-      `${player1.nickname} ${data.results.ranked[player1.uuid]} - ${data.results.ranked[player2.uuid]} ${player2.nickname}`,
+      `${player1.country ? getFlag(player1.country) : ''} ${player1.nickname} ${data.results.ranked[player1.uuid]} - ${data.results.ranked[player2.uuid]} ${player2.nickname} ${player2.country ? getFlag(player2.country) : ''}`,
       `${data.results.ranked.total} total game(s)`,
     ];
     return sections.join(' \u2756 ');
@@ -466,5 +467,18 @@ export class MobibotClient {
         .join(', '),
     ];
     return sections.join(' \u2756 ');
+  }
+  async leaderboard(): Promise<string> {
+    const leaderboard = await this.ranked.getLeaderboard();
+
+    // Only consider top 10
+    const top10 = leaderboard.data.users.slice(0, 10);
+
+    const sections = top10.map(
+      (player) =>
+        `#${player.eloRank} ${player.country ? getFlag(player.country) : ''} ${player.nickname} (${player.eloRate})`,
+    );
+
+    return sections.join(' \u2756  ');
   }
 }

@@ -182,9 +182,21 @@ export const VSResponseSchema = z.object({
     }),
   }),
 });
+export const LeaderboardResponseSchema = z.object({
+  status: z.string(),
+  data: z.object({
+    season: z.object({
+      startsAt: z.number(),
+      endsAt: z.number(),
+      number: z.number(),
+    }),
+    users: z.array(UserProfileSchema),
+  }),
+});
 
 export type UserProfile = z.infer<typeof UserProfileSchema>;
 export type Match = z.infer<typeof MatchSchema>;
 export type GetUserDataResponse = z.infer<typeof GetUserDataResponseSchema>;
 export type MatchesResponse = z.infer<typeof MatchesResponseSchema>;
 export type VSResponse = z.infer<typeof VSResponseSchema>;
+export type LeaderboardResponse = z.infer<typeof LeaderboardResponseSchema>;

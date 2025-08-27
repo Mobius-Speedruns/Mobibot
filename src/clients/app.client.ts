@@ -7,6 +7,7 @@ import {
   HOURS_BETWEEN,
   HOURS,
   INTEGER_REGEX,
+  NO_ARGUMENT,
 } from '../types/app';
 import { SplitName } from '../types/paceman';
 import { TwitchClient } from './twitch.client';
@@ -453,6 +454,10 @@ export class AppClient {
       case BotCommand.AVERAGE:
         response = await this.mobibotClient.average(mcName);
         break;
+      case BotCommand.LEADERBOARD:
+      case BotCommand.LB:
+        response = await this.mobibotClient.leaderboard();
+        break;
       default:
         return;
     }
@@ -474,7 +479,10 @@ export class AppClient {
     let mcName: string;
     let remainingArgs: string[];
 
-    if (args.length > 0 && !INTEGER_REGEX.test(args[0])) {
+    if (NO_ARGUMENT.includes(cmd as BotCommand)) {
+      mcName = '';
+      remainingArgs = [];
+    } else if (args.length > 0 && !INTEGER_REGEX.test(args[0])) {
       // First arg is a username override
       mcName = args[0];
       remainingArgs = args.slice(1);
