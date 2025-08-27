@@ -1,4 +1,5 @@
 export function appendInvisibleChars(str: string): string {
-  const invisibleSeq = '.';
+  // TODO: find a nice way to do this with twitch sanitising.
+  const invisibleSeq = '󠀀';
   return str + invisibleSeq;
 }
