@@ -39,11 +39,6 @@ export class TwitchClient extends EventEmitter {
   private readyPromise?: Promise<void>;
   private readyResolve?: () => void;
 
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectTimeout?: NodeJS.Timeout;
-  private isReconnecting = false;
-
   // Track active subscriptions for re-establishment
   private activeChannels = new Set<string>();
 
@@ -113,6 +108,7 @@ export class TwitchClient extends EventEmitter {
     }
 
     const broadcasterUserId = await this.fetchChannelId(channelName);
+    this.activeChannels.add(channelName);
 
     const body = {
       type: 'channel.chat.message',
@@ -130,8 +126,6 @@ export class TwitchClient extends EventEmitter {
     const response = await this.api.post('helix/eventsub/subscriptions', body);
 
     if (response.status === 202) {
-      // Track successful subscription
-      this.activeChannels.add(channelName);
       this.logger.debug(`Successfully subscribed to channel ${channelName}`);
     } else {
       this.logger.warn(response.data, `Failed to subscribe to ${channelName}:`);
@@ -273,7 +267,7 @@ export class TwitchClient extends EventEmitter {
 
       if (reconnectUrl) {
         this.logger.info(`Reconnecting to new URL: ${reconnectUrl}`);
-        this.handleTwitchReconnect(reconnectUrl);
+        this.handleReconnect(reconnectUrl);
       } else {
         this.logger.error('Reconnect message missing reconnect_url');
       }
@@ -297,10 +291,6 @@ export class TwitchClient extends EventEmitter {
         // Make the reconnect websocket the primary
         this.websocket = this.reconnectWebSocket;
         this.reconnectWebSocket = undefined;
-
-        // Reset reconnection state
-        this.reconnectAttempts = 0;
-        this.isReconnecting = false;
       }
 
       this.sessionId = newSessionId;
@@ -338,13 +328,13 @@ export class TwitchClient extends EventEmitter {
     this.logger.debug(message, 'Unhandled Message');
   }
 
-  private handleTwitchReconnect(reconnectUrl: string): void {
+  private handleReconnect(reconnectUrl: string): void {
     this.logger.info('Starting Twitch-initiated reconnect process');
     try {
       this.reconnectWebSocket = this.startWebSocket(reconnectUrl);
     } catch (error) {
       this.logger.error(error, 'Failed to create reconnect WebSocket');
-      this.reconnect();
+      throw error;
     }
   }
 
@@ -392,57 +382,22 @@ export class TwitchClient extends EventEmitter {
     });
 
     ws.on('error', (error: unknown) => {
-      const msg = parseError(error);
-      this.logger.error({ msg }, 'WebSocket error');
-      this.emit('error', new Error(`Twitch WebSocket error: ${msg}`));
+      this.logger.error({ error }, 'WebSocket error');
     });
 
     // Handle WebSocket close/disconnect
     ws.on('close', (code, reason) => {
-      const reasonStr = reason ? reason.toString() : 'No reason provided';
-
-      if (this.isReconnecting) {
-        // Already handling reconnection, don't trigger another
-        return;
-      }
-
-      if (this.isRecoverableError(code)) {
-        this.logger.warn(
-          `WebSocket disconnected (recoverable) with code ${code}, reason: ${reasonStr}`,
-        );
-        this.logger.warn('Attempting automatic reconnection...');
-
-        if (this.reconnectTimeout) {
-          clearTimeout(this.reconnectTimeout);
-        }
-
-        // Start reconnection process
-        this.reconnect();
-      } else if (code === 1000) {
+      this.logger.debug(`Handling close ${code}`);
+      if (code === 1000) {
         // Do nothing, connection closed intentionally.
         return;
-      } else {
-        this.logger.error(
-          `WebSocket closed with code ${code}, reason: ${reasonStr}`,
-        );
-        this.emit(
-          'error',
-          new Error(`Twitch WebSocket closed with code ${code}: ${reasonStr}`),
-        );
       }
-    });
 
-    // Handle unexpected response
-    ws.on('unexpected-response', (request, response) => {
+      const reasonStr = reason ? reason.toString() : 'No reason provided';
       this.logger.error(
-        `WebSocket unexpected response: ${response.statusCode}`,
+        `WebSocket closed with code ${code}, reason: ${reasonStr}`,
       );
-      this.emit(
-        'error',
-        new Error(
-          `Twitch WebSocket unexpected response: ${response.statusCode}`,
-        ),
-      );
+      this.handleReconnect(this.websocketURL);
     });
 
     return ws;
@@ -476,67 +431,6 @@ export class TwitchClient extends EventEmitter {
       this.logger.error(data, 'Invalid response from fetchSubscriptions');
       throw new Error('Invalid response from fetchSubscriptions');
     }
-    return data;
-  }
-
-  private reconnect(): void {
-    if (this.isReconnecting) return;
-
-    this.isReconnecting = true;
-    this.reconnectAttempts++;
-
-    // Stop trying reconnects
-    if (this.reconnectAttempts > this.maxReconnectAttempts) {
-      this.logger.error(
-        `Failed to reconnect after ${this.maxReconnectAttempts} attempts. Giving up.`,
-      );
-      this.isReconnecting = false;
-      this.emit(
-        'error',
-        new Error(
-          `WebSocket reconnection failed after ${this.maxReconnectAttempts} attempts`,
-        ),
-      );
-      return;
-    }
-
-    // Exponential backoff for reconnection attempts
-    const delay = Math.min(
-      30000,
-      Math.pow(2, this.reconnectAttempts - 1) * 1000,
-    );
-
-    this.reconnectTimeout = setTimeout(() => {
-      void (async () => {
-        try {
-          this.logger.info(
-            `Reconnecting to Twitch WebSocket (attempt ${this.reconnectAttempts})`,
-          );
-
-          // Clean up existing websocket
-          if (this.websocket) {
-            this.websocket.removeAllListeners();
-            if (this.websocket.readyState === WebSocket.OPEN) {
-              this.websocket.close(1000);
-            }
-          }
-
-          // Re-validate auth and start new websocket
-          await this.validateAuth();
-          this.websocket = this.startWebSocket();
-        } catch (error: unknown) {
-          this.logger.error(
-            { msg: parseError(error) },
-            'Reconnection attempt failed:',
-          );
-          this.isReconnecting = false;
-          this.reconnect();
-        }
-      })();
-    }, delay);
-  }
-
-  private isRecoverableError(code: number): boolean {
-    return RECOVERABLE_CODES.includes(code);
+    return parsedData;
   }
 }
