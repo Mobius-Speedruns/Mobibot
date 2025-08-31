@@ -1,6 +1,6 @@
 {
   "name": "mobibot",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Twitch Bot for fetching MCSR stats",
   "main": "index.js",
   "scripts": {
