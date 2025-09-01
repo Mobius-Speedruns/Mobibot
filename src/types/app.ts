@@ -27,6 +27,7 @@ export enum BotCommand {
   LASTEND = 'lastend',
   LASTCOMPLETION = 'lastcompletion',
   LASTFINISH = 'lastfinish',
+  WASTED = 'wasted',
   DAILY = 'daily',
   WEEKLY = 'weekly',
   MONTHLY = 'monthly',

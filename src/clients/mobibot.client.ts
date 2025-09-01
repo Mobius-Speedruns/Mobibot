@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Logger as PinoLogger } from 'pino';
 import { PacemanClient } from './paceman.api';
-import { Day, SplitName } from '../types/paceman';
+import { Day, Run, SplitName } from '../types/paceman';
 import { Seedwave, Service } from '../types/app';
 import {
   getRelativeTime,
@@ -51,6 +51,24 @@ export class MobibotClient {
     if (recentRun.length === 0) return null;
     const worldId = await this.paceman.getWorld(recentRun[0].id);
     return worldId.data.nickname;
+  }
+
+  private getLargestSplitTime(run: Run): number {
+    const splits: (keyof Run)[] = [
+      'nether',
+      'bastion',
+      'fortress',
+      'first_portal',
+      'stronghold',
+      'end',
+      'finish',
+    ];
+
+    const times = splits
+      .map((split) => run[split])
+      .filter((time): time is number => time != null);
+
+    return times.length > 0 ? Math.max(...times) : 0;
   }
 
   // -----------------------------
@@ -162,6 +180,38 @@ export class MobibotClient {
     const leaderboard = await this.paceman.getLeaderboard(days);
     const first = leaderboard[0];
     return `${capitalizeWords(Day[days])} Paceman Record: ${first.name} with ${msToTime(first.value)}`;
+  }
+  async wastedTime(
+    name: string,
+    hours?: number,
+    hoursBetween?: number,
+  ): Promise<string> {
+    const [nph, session] = await Promise.all([
+      this.paceman.getNPH(name, hours, hoursBetween),
+      this.paceman.getSessionStats(name, hours, hoursBetween),
+    ]);
+    if (!session) return 'Could not fetch session stats!';
+    const seeds = await this.paceman.getRecentRuns(name, session.nether.count);
+
+    // Time played in seeds
+    const inSeedPlaytime = seeds.reduce((sum, seed) => {
+      if (seed.updatedTime === null || !seed.nether) return sum;
+      // TODO: updateTime - time includes RTA. maybe a problem?
+      const rtaTime = (seed.updatedTime - seed.time) * 1000 + seed.nether;
+      return (sum += rtaTime);
+    }, 0);
+
+    // Total time in-between seeds
+    const wastedTime = nph.playtime - inSeedPlaytime;
+
+    const sections = [
+      `${msToTime(wastedTime / session.nether.count, false)} avg wasted time spent per enter`,
+      `${msToTime(wastedTime, false)} total wasted time (${((wastedTime / nph.playtime) * 100).toFixed(1)}%)`,
+      `${msToTime(inSeedPlaytime, false)} spent in seeds that entered (${((inSeedPlaytime / nph.playtime) * 100).toFixed(1)}%)`,
+      `${msToTime(nph.playtime, false)} total playtime`,
+      `${msToTime(nph.walltime, false)} total walltime`,
+    ];
+    return sections.join(' \u2756 ');
   }
 
   // -----------------------------
