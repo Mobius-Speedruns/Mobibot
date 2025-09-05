@@ -14,6 +14,7 @@ import {
   worldSchema,
   Day,
   Leaderboard,
+  User,
 } from '../types/paceman';
 import { Service } from '../types/app';
 
@@ -151,6 +152,14 @@ export class PacemanClient {
     const { data } = await this.api.get<Leaderboard[]>('/getLeaderboard', {
       params,
     });
+
+    return data;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    this.logger.debug(`Handling /getAllUsers`);
+
+    const { data } = await this.api.get<User[]>('/getAllUsers');
 
     return data;
   }

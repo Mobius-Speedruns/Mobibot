@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Logger as PinoLogger } from 'pino';
 import { PacemanClient } from './paceman.api';
-import { Day, SplitName } from '../types/paceman';
+import { Day, SplitName, User } from '../types/paceman';
 import { Seedwave, Service } from '../types/app';
 import {
   getRelativeTime,
@@ -51,6 +51,10 @@ export class MobibotClient {
     if (recentRun.length === 0) return null;
     const worldId = await this.paceman.getWorld(recentRun[0].id);
     return worldId.data.nickname;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await this.paceman.getAllUsers();
   }
 
   // -----------------------------

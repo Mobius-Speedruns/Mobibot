@@ -3,7 +3,14 @@ import fs from 'fs';
 import path from 'path';
 import { Logger as PinoLogger } from 'pino';
 import { Service } from '../types/app';
-import { ChannelRow, ChannelRowSchema } from '../types/postgres';
+import {
+  ChannelRow,
+  ChannelRowSchema,
+  TwitchRow,
+  TwitchRowSchema,
+  UserRow,
+  UserRowSchema,
+} from '../types/postgres';
 import { parseError } from '../util/parseError';
 
 export class PostgresClient {
@@ -46,7 +53,11 @@ export class PostgresClient {
     await this.createMigrationsTable();
 
     // Define migrations in order
-    const migrationFiles = ['001_init.sql', '002_add_subscribed_column.sql'];
+    const migrationFiles = [
+      '001_init.sql',
+      '002_add_subscribed_column.sql',
+      '003_create_user_cache.sql',
+    ];
 
     for (const file of migrationFiles) {
       try {
@@ -82,13 +93,14 @@ export class PostgresClient {
     mcName?: string,
   ): Promise<ChannelRow | null> {
     const res = await this.pool.query<ChannelRow>(
-      `INSERT INTO channels (name, mc_name)
-     VALUES ($1, $2)
-     ON CONFLICT (name)
-     DO UPDATE SET 
-       mc_name = EXCLUDED.mc_name,
-       updated_at = NOW()
-     RETURNING *`,
+      `
+      INSERT INTO channels (name, mc_name)
+      VALUES ($1, $2)
+      ON CONFLICT (name)
+      DO UPDATE SET 
+        mc_name = EXCLUDED.mc_name,
+        updated_at = NOW()
+      RETURNING *`,
       [name.toLowerCase(), mcName ?? null],
     );
     return res.rows[0];
@@ -134,6 +146,44 @@ export class PostgresClient {
     return ChannelRowSchema.parse(res.rows[0]);
   }
 
+  async getUserFuzzy(name: string): Promise<string | null> {
+    /**
+     * Fuzzy search user cache using name, returning name.
+     */
+    const res = await this.pool.query<UserRow>(
+      `
+      SELECT name, similarity(name, $1) AS score
+      FROM users
+      ORDER BY score DESC
+      LIMIT 1;
+      `,
+      [name],
+    );
+
+    if (res.rowCount === 0) return null;
+
+    return UserRowSchema.parse(res.rows[0]).name;
+  }
+
+  async getTwitchFuzzy(channel: string): Promise<string | null> {
+    /**
+     * Fuzzy search twitch cache using channel, returning name.
+     */
+    const res = await this.pool.query<TwitchRow>(
+      `
+      SELECT channel, name, similarity(channel, $1) AS score
+      FROM twitches
+      ORDER BY score DESC
+      LIMIT 1;
+      `,
+      [channel],
+    );
+
+    if (res.rowCount === 0) return null;
+
+    return TwitchRowSchema.parse(res.rows[0]).name;
+  }
+
   async getAllChannels(): Promise<
     Pick<ChannelRow, 'name' | 'mc_name' | 'subscribed'>[]
   > {
@@ -169,6 +219,32 @@ export class PostgresClient {
     ]);
 
     return (res.rowCount ?? 0) > 0;
+  }
+
+  async upsertUser(user: string): Promise<string> {
+    const res = await this.pool.query<UserRow>(
+      `INSERT INTO users (name, updated_at)
+        VALUES ($1, NOW())
+        ON CONFLICT (name) DO UPDATE
+        SET updated_at = NOW()
+        RETURNING *`,
+      [user],
+    );
+    return res.rows[0].name;
+  }
+
+  async upsertTwitch(user: string, twitch: string): Promise<string> {
+    const res = await this.pool.query<TwitchRow>(
+      `INSERT INTO twitches (channel, name, updated_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (channel) DO UPDATE
+        SET name = EXCLUDED.name,
+            updated_at = NOW()
+        RETURNING *;
+        `,
+      [user, twitch],
+    );
+    return res.rows[0].name;
   }
 
   async close() {

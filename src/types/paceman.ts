@@ -78,6 +78,7 @@ export const pbSchema = z.array(
 export const userSchema = z.object({
   id: z.string(),
   nick: z.string(),
+  twitches: z.array(z.string()),
 });
 export const worldSchema = z.object({
   data: runSchema.extend({

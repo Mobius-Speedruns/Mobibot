@@ -31,6 +31,23 @@ export class AppClient {
     this.mobibotClient = mobibotClient;
     this.client = client;
     this.logger = logger.child({ Service: Service.APP });
+
+    // Fetch users from paceman in prod.
+    if (process.env.NODE_ENV === 'production') {
+      // Schedule once every 24 hours
+      setInterval(() => {
+        this.refreshUsers().catch((err) =>
+          this.logger.error({ err }, 'refreshUsers failed'),
+        );
+      }, 86_400_000);
+
+      // Refresh users on startup
+      this.refreshUsers().catch((err) =>
+        this.logger.error({ err }, 'initial refreshUsers failed'),
+      );
+    } else {
+      this.logger.info('Skipping user refresh job (not in production)');
+    }
   }
 
   public async start() {
@@ -95,6 +112,25 @@ export class AppClient {
         this.logger.error(err);
       }
     }
+  }
+
+  private async refreshUsers(): Promise<void> {
+    this.logger.info('Refreshing users from Paceman...');
+
+    const users = await this.mobibotClient.getAllUsers();
+
+    for (const user of users) {
+      this.logger.debug(`Upserting user ${user.nick}`);
+      // Upsert user
+      await this.db.upsertUser(user.nick);
+
+      // Upsert twitch handles for this user
+      for (const channel of user.twitches) {
+        await this.db.upsertTwitch(user.nick, channel);
+      }
+    }
+
+    this.logger.info(`Refreshed ${users.length} users.`);
   }
 
   // -----------------------------

@@ -56,7 +56,7 @@ export class TwitchClient extends EventEmitter {
 
     this.authApi = axios.create({
       baseURL: 'https://id.twitch.tv/oauth2',
-      timeout: 10000,
+      timeout: 30000,
     });
     this.api = axios.create({
       baseURL: 'https://api.twitch.tv/',
@@ -64,7 +64,7 @@ export class TwitchClient extends EventEmitter {
         'Client-Id': this.clientId,
         'Content-Type': 'application/json',
       },
-      timeout: 10000,
+      timeout: 30000,
     });
 
     // Interceptor to inject fresh OAuth token into every request
