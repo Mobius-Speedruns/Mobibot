@@ -15,6 +15,7 @@ import { parseError } from '../util/parseError';
 
 export class PostgresClient {
   private pool: Pool;
+  private minSimilarityScore: number = 0.3;
   private logger: PinoLogger;
 
   constructor(connectionString: string, logger: PinoLogger) {
@@ -152,12 +153,13 @@ export class PostgresClient {
      */
     const res = await this.pool.query<UserRow>(
       `
-      SELECT name, similarity(name, $1) AS score
+      SELECT *, similarity(name, $1) AS score
       FROM users
+      WHERE similarity(name, $1) >= $2
       ORDER BY score DESC
       LIMIT 1;
       `,
-      [name],
+      [name, this.minSimilarityScore],
     );
 
     if (res.rowCount === 0) return null;
@@ -171,12 +173,13 @@ export class PostgresClient {
      */
     const res = await this.pool.query<TwitchRow>(
       `
-      SELECT channel, name, similarity(channel, $1) AS score
+      SELECT *, similarity(channel, $1) AS score
       FROM twitches
+      WHERE similarity(channel, $1) >= $2
       ORDER BY score DESC
       LIMIT 1;
       `,
-      [channel],
+      [channel, this.minSimilarityScore],
     );
 
     if (res.rowCount === 0) return null;
@@ -235,7 +238,7 @@ export class PostgresClient {
 
   async upsertTwitch(user: string, twitch: string): Promise<string> {
     const res = await this.pool.query<TwitchRow>(
-      `INSERT INTO twitches (channel, name, updated_at)
+      `INSERT INTO twitches (name, channel, updated_at)
         VALUES ($1, $2, NOW())
         ON CONFLICT (channel) DO UPDATE
         SET name = EXCLUDED.name,

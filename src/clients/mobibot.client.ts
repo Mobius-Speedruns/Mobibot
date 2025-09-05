@@ -16,19 +16,23 @@ import axios from 'axios';
 import { MatchType, NETHER_TYPE, OVERWORLD_TYPE } from '../types/ranked';
 import { capitalizeWords } from '../util/capitalizeWords';
 import { getFlag } from '../util/getFlag';
+import { PostgresClient } from './postgres.client';
 
 export class MobibotClient {
   private paceman: PacemanClient;
   private ranked: RankedClient;
+  private db: PostgresClient;
   private logger: PinoLogger;
 
   constructor(
     paceman: PacemanClient,
     ranked: RankedClient,
+    db: PostgresClient,
     logger: PinoLogger,
   ) {
     this.paceman = paceman;
     this.ranked = ranked;
+    this.db = db;
     this.logger = logger.child({ Service: Service.MOBIBOT });
 
     // Error handling.
@@ -47,10 +51,37 @@ export class MobibotClient {
 
   // Helper function to convert user-inputs into real MCSR name
   async getRealNickname(name: string): Promise<string | null> {
-    const recentRun = await this.paceman.getRecentRuns(name, 1);
-    if (recentRun.length === 0) return null;
-    const worldId = await this.paceman.getWorld(recentRun[0].id);
-    return worldId.data.nickname;
+    let username: string | null;
+    const isAt = name.includes('@');
+
+    this.logger.info(`name: ${name}, isAt: ${isAt}`);
+
+    // Use caches obtained via paceman
+    // If @ was used, assume a twitch handle
+    if (isAt) {
+      username = await this.db.getTwitchFuzzy(name);
+      // If no name found, attempt user search
+      if (!username) username = await this.db.getUserFuzzy(name);
+    } else {
+      // Attempt user name search
+      username = await this.db.getUserFuzzy(name);
+      // If no name found, attempt twitch handle
+      if (!username) username = await this.db.getTwitchFuzzy(name);
+    }
+
+    // If no twitch found, attempt search on ranked.
+    if (!username) {
+      try {
+        const user = await this.ranked.getUserData(name);
+        if (user.data.nickname) {
+          username = user.data.nickname;
+          // Update the cache
+          this.db.upsertUser(username);
+        }
+      } catch {}
+    }
+
+    return username;
   }
 
   async getAllUsers(): Promise<User[]> {
@@ -147,13 +178,7 @@ export class MobibotClient {
     return sections.join(' \u2756 ');
   }
   async pb(names: string): Promise<string> {
-    // PB endpoint is case sensitive. Attempt to retrieve first
-    const mcName = await this.getRealNickname(names);
-    if (!mcName) {
-      return `⚠️ Player not found in paceman.`;
-    }
-
-    const pbs = await this.paceman.getPBs(mcName);
+    const pbs = await this.paceman.getPBs(names);
     if (!pbs) return 'Unable to fetch pbs, try again later';
     const response = pbs
       .map(

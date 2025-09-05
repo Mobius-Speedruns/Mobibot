@@ -14,10 +14,10 @@ import fs from 'fs';
 dotenv.config();
 
 // Create clients
+const db = new PostgresClient(process.env.PG_CONNECTION!, pinoLogger);
 const paceman = new PacemanClient('https://paceman.gg/stats/api', pinoLogger);
 const ranked = new RankedClient('https://api.mcsrranked.com', pinoLogger);
-const mobibot = new MobibotClient(paceman, ranked, pinoLogger);
-const db = new PostgresClient(process.env.PG_CONNECTION!, pinoLogger);
+const mobibot = new MobibotClient(paceman, ranked, db, pinoLogger);
 
 // Initialize Twitch WebSocket client
 const twitchClient = new TwitchClient(pinoLogger);

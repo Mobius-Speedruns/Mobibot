@@ -58,7 +58,7 @@ export class PacemanClient {
   }
 
   async getPBs(names: string): Promise<PB> {
-    this.logger.debug(`Handling /getPBs`);
+    this.logger.debug(`Handling /getPBs ${names}`);
 
     const params: Record<string, string | number> = { names };
 

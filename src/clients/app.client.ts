@@ -358,7 +358,6 @@ export class AppClient {
     for (const channel of linkedChannels) {
       if (!channel.mc_name) continue;
       try {
-        // Get the latest real nickname from your external API
         const mcName = await this.mobibotClient.getRealNickname(
           channel.mc_name,
         );
@@ -390,10 +389,18 @@ export class AppClient {
   private async handleCommand(
     channel: string,
     cmd: string,
-    mcName: string,
+    name: string,
     args: string[],
   ): Promise<void> {
     let response: string | void;
+    let mcName: string | null;
+
+    // Fetch real username
+    mcName = await this.mobibotClient.getRealNickname(name);
+    if (!mcName) {
+      await this.client.send(channel, 'Player not found.');
+      return;
+    }
 
     switch (cmd.toLowerCase() as BotCommand) {
       case BotCommand.COMMANDS:
@@ -489,7 +496,12 @@ export class AppClient {
       case BotCommand.RECORD: {
         if (args.length >= 1) {
           const season = this.parseIntArg(args[1]) || undefined;
-          response = await this.mobibotClient.record(mcName, args[0], season);
+          const opp = await this.mobibotClient.getRealNickname(args[0]);
+          if (!opp) {
+            await this.client.send(channel, `Player ${args[0]} not found.`);
+            return;
+          }
+          response = await this.mobibotClient.record(mcName, opp, season);
         } else {
           await this.client.send(
             channel,
