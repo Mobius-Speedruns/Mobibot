@@ -65,6 +65,8 @@ export const recentRunSchema = z.array(
     obtainCryingObsidian: z.number().nullable(),
     obtainRod: z.number().nullable(),
     time: z.number(),
+    updatedTime: z.number().nullable(),
+    realUpdated: z.number().nullable(),
   }),
 );
 export const pbSchema = z.array(
