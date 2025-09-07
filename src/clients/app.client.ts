@@ -572,6 +572,8 @@ export class AppClient {
     } else {
       // Use subscribed username
       const subscribedMcName = await this.db.getMcName(username);
+
+      // TODO: If no subscribed username, attempt to find twitch relation
       if (!subscribedMcName) {
         await this.client.send(
           channel,

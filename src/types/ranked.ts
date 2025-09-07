@@ -79,7 +79,7 @@ export const UserProfileSchema = z.object({
   country: z.string().nullable().optional(),
 });
 export const MatchSeedSchema = z.object({
-  id: z.string(),
+  id: z.string().nullable(),
   overworld: z.enum(OVERWORLD_TYPE).optional().nullable(),
   nether: z.enum(NETHER_TYPE).optional().nullable(),
 });

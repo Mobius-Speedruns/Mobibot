@@ -54,8 +54,6 @@ export class MobibotClient {
     let username: string | null;
     const isAt = name.includes('@');
 
-    this.logger.info(`name: ${name}, isAt: ${isAt}`);
-
     // Use caches obtained via paceman
     // If @ was used, assume a twitch handle
     if (isAt) {
