@@ -393,11 +393,11 @@ export class AppClient {
     args: string[],
   ): Promise<void> {
     let response: string | void;
-    let mcName: string | null;
 
     // Fetch real username
-    if (NO_ARGUMENT.includes(cmd as BotCommand)) {
-      mcName = await this.mobibotClient.getRealNickname(name);
+    const mcName = (await this.mobibotClient.getRealNickname(name)) || '';
+
+    if (!NO_ARGUMENT.includes(cmd as BotCommand)) {
       if (!mcName) {
         await this.client.send(channel, 'Player not found.');
         return;
