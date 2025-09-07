@@ -37,12 +37,14 @@ export class AppClient {
       // Schedule once every 24 hours
       setInterval(() => {
         this.refreshUsers().catch((err) =>
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           this.logger.error({ err }, 'refreshUsers failed'),
         );
       }, 86_400_000);
 
       // Refresh users on startup
       this.refreshUsers().catch((err) =>
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         this.logger.error({ err }, 'initial refreshUsers failed'),
       );
     } else {
@@ -115,6 +117,7 @@ export class AppClient {
   }
 
   private async refreshUsers(): Promise<void> {
+    // TODO: add a getAll for ranked - use connections to make links between user and twitch
     this.logger.info('Refreshing users from Paceman...');
 
     const users = await this.mobibotClient.getAllUsers();
@@ -570,18 +573,28 @@ export class AppClient {
       mcName = args[0];
       remainingArgs = args.slice(1);
     } else {
+      mcName = '';
       // Use subscribed username
       const subscribedMcName = await this.db.getMcName(username);
 
-      // TODO: If no subscribed username, attempt to find twitch relation
+      // If no subscribed username, attempt to find twitch relation
       if (!subscribedMcName) {
+        this.logger.debug(`User ${username} not joined, attempting cache.`);
+        mcName =
+          (await this.mobibotClient.getRealNickname(`@${username}`)) || '';
+      }
+      // Otherwise, use available subscribed name
+      else {
+        mcName = subscribedMcName;
+      }
+
+      if (!mcName) {
         await this.client.send(
           channel,
           `⚠️ You must use !link to link your Minecraft Username to your twitch account before using +${cmd}.`,
         );
         return;
       }
-      mcName = subscribedMcName;
       remainingArgs = args;
     }
 
