@@ -23,7 +23,7 @@ export class PacemanClient {
   private logger: PinoLogger;
 
   constructor(baseURL: string, logger: PinoLogger) {
-    this.api = axios.create({ baseURL, timeout: 10000 });
+    this.api = axios.create({ baseURL, timeout: 30000 });
     this.logger = logger.child({ Service: Service.PACEMAN });
 
     // Intercept player not found errors

@@ -21,7 +21,7 @@ export class RankedClient {
   private logger: PinoLogger;
 
   constructor(baseURL: string, logger: PinoLogger) {
-    this.api = axios.create({ baseURL, timeout: 10000 });
+    this.api = axios.create({ baseURL, timeout: 30000 });
     this.logger = logger.child({ Service: Service.RANKED });
 
     // Intercept player not found errors
@@ -157,7 +157,7 @@ export class RankedClient {
         throw new Error('Invalid response from getAllMatches');
       }
 
-      const matches = parsedData.data;
+      const matches = parsedData.data.filter((match) => match.id);
       if (!matches || matches.length === 0) {
         moreRunsAvailable = false;
       } else {
