@@ -277,23 +277,20 @@ export class AppClient {
     }
 
     const mcName = await this.mobibotClient.getRealNickname(userName);
-    if (!mcName) {
-      await this.client.send(channel, `⚠️ Player not found in paceman.`);
-      return;
-    }
 
     try {
-      const row = await this.db.upsertChannel(chanName, mcName);
+      const row = await this.db.upsertChannel(chanName, userName);
 
       // Alert user about joining.
       let joinAlert: string = '';
       if (row?.subscribed)
         joinAlert = '. Please use !join if you want Mobibot to join your chat';
+      let message = `✅ Linked Minecraft Username ${userName} to ${chanName}${joinAlert}`;
 
-      await this.client.send(
-        channel,
-        `✅ Linked Minecraft Username ${mcName} to ${chanName}${joinAlert}`,
-      );
+      // Alert user for possible misspell.
+      if (!mcName || mcName.toLowerCase() !== userName.toLowerCase())
+        message += `. Note you may have misspelled your username, some commands are case sensitive!`;
+      await this.client.send(channel, message);
     } catch (err: unknown) {
       if (err instanceof Error) {
         this.logger.error(
@@ -392,13 +389,10 @@ export class AppClient {
   private async handleCommand(
     channel: string,
     cmd: string,
-    name: string,
+    mcName: string,
     args: string[],
   ): Promise<void> {
     let response: string | void;
-
-    // Fetch real username
-    const mcName = (await this.mobibotClient.getRealNickname(name)) || '';
 
     if (!NO_ARGUMENT.includes(cmd as BotCommand)) {
       if (!mcName) {
@@ -570,7 +564,7 @@ export class AppClient {
       remainingArgs = args;
     } else if (args.length > 0 && !INTEGER_REGEX.test(args[0])) {
       // First arg is a username override
-      mcName = args[0];
+      mcName = (await this.mobibotClient.getRealNickname(args[0])) || '';
       remainingArgs = args.slice(1);
     } else {
       mcName = '';
