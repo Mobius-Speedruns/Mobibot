@@ -527,15 +527,13 @@ export class AppClient {
         break;
       }
       case BotCommand.WASTED: {
-        response =
-          'Temporarily disabled, sorry! Something is wrong with the calcs :(';
-        // const hours = this.parseIntArg(args[0]) || HOURS;
-        // const hoursBetween = this.parseIntArg(args[1]) || HOURS_BETWEEN;
-        // response = await this.mobibotClient.wastedTime(
-        //   mcName,
-        //   hours,
-        //   hoursBetween,
-        // );
+        const hours = this.parseIntArg(args[0]) || HOURS;
+        const hoursBetween = this.parseIntArg(args[1]) || HOURS_BETWEEN;
+        response = await this.mobibotClient.wastedTime(
+          mcName,
+          hours,
+          hoursBetween,
+        );
         break;
       }
       default:

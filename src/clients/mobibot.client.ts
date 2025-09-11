@@ -220,12 +220,10 @@ export class MobibotClient {
     if (!session) return 'Could not fetch session stats!';
     const seeds = await this.paceman.getRecentRuns(name, session.nether.count);
 
-    // Time played in seeds
+    // OW time from pace
     const inSeedPlaytime = seeds.reduce((sum, seed) => {
       if (seed.updatedTime === null || !seed.nether) return sum;
-      // TODO: updateTime - time includes RTA. maybe a problem?
-      const rtaTime = (seed.updatedTime - seed.time) * 1000 + seed.nether;
-      return (sum += rtaTime);
+      return (sum += seed.nether);
     }, 0);
 
     // Total time in-between seeds
@@ -234,7 +232,7 @@ export class MobibotClient {
     const sections = [
       `${msToTime(wastedTime / session.nether.count, false)} avg wasted time spent per enter`,
       `${msToTime(wastedTime, false)} total wasted time (${((wastedTime / nph.playtime) * 100).toFixed(1)}%)`,
-      `${msToTime(inSeedPlaytime, false)} spent in seeds that entered (${((inSeedPlaytime / nph.playtime) * 100).toFixed(1)}%)`,
+      `${msToTime(inSeedPlaytime, false)} spent in overworlds that entered (${((inSeedPlaytime / nph.playtime) * 100).toFixed(1)}%)`,
       `${msToTime(nph.playtime, false)} total playtime`,
       `${msToTime(nph.walltime, false)} total walltime`,
     ];
