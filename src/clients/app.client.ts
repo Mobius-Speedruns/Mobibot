@@ -150,7 +150,7 @@ export class AppClient {
       if (!userName) {
         await this.client.send(
           channel,
-          `⚠️ Please provide your Minecraft Username after !join.`,
+          `⚠️ Please provide your Minecraft username after !join.`,
         );
         return;
       }
@@ -162,14 +162,19 @@ export class AppClient {
         return;
       }
 
+      // Alert user about joining.
+      let message = `✅ Mobibot joined ${chanName} with Minecraft username: ${userName}`;
+
+      this.logger.debug(`${mcName} - ${userName}`);
+      // Alert user for possible misspell.
+      if (!mcName || mcName !== userName)
+        message += `. Note, you may have misspelled your username, some commands are case sensitive!`;
+
       // Add channel
       try {
-        await this.db.createChannel(chanName, mcName, true); // Create the channel
+        await this.db.createChannel(chanName, userName, true); // Create the channel
         await this.client.subscribe(chanName); // Subscribe to channel's chat
-        await this.client.send(
-          channel,
-          `✅ Mobibot joined ${chanName} with Minecraft Username: ${mcName}`,
-        );
+        await this.client.send(channel, message);
       } catch (err: unknown) {
         if (err instanceof Error) {
           this.logger.error(`Failed to subscribe ${chanName}: ${err.message}`);
@@ -209,7 +214,7 @@ export class AppClient {
     } else {
       await this.client.send(
         channel,
-        `⚠️ Already joined. Use !link to update your Minecraft Username, or !leave to remove Mobibot from your channel.`,
+        `⚠️ Already joined. Use !link to update your Minecraft username, or !leave to remove Mobibot from your channel.`,
       );
       return;
     }
@@ -271,7 +276,7 @@ export class AppClient {
     if (!userName) {
       await this.client.send(
         channel,
-        `⚠️ Please provide your Minecraft Username after !link.`,
+        `⚠️ Please provide your Minecraft username after !link.`,
       );
       return;
     }
@@ -283,13 +288,14 @@ export class AppClient {
 
       // Alert user about joining.
       let joinAlert: string = '';
-      if (row?.subscribed)
+      if (!row?.subscribed)
         joinAlert = '. Please use !join if you want Mobibot to join your chat';
-      let message = `✅ Linked Minecraft Username ${userName} to ${chanName}${joinAlert}`;
+      let message = `✅ Linked Minecraft username ${userName} to ${chanName}${joinAlert}`;
 
       // Alert user for possible misspell.
-      if (!mcName || mcName.toLowerCase() !== userName.toLowerCase())
-        message += `. Note you may have misspelled your username, some commands are case sensitive!`;
+      this.logger.debug(`${mcName} - ${userName}`);
+      if (!mcName || mcName !== userName)
+        message += `. Note, you may have misspelled your username, some commands are case sensitive!`;
       await this.client.send(channel, message);
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -304,7 +310,7 @@ export class AppClient {
 
       await this.client.send(
         channel,
-        `⚠️ Could not link Minecraft Username due to a database error.`,
+        `⚠️ Could not link Minecraft username due to a database error.`,
       );
     }
   }
@@ -318,7 +324,7 @@ export class AppClient {
       if (!mcUsername) {
         await this.client.send(
           channel,
-          `⚠️ No linked Minecraft Username to ${chanName}`,
+          `⚠️ No linked Minecraft username to ${chanName}`,
         );
         return;
       }
@@ -347,7 +353,7 @@ export class AppClient {
 
       await this.client.send(
         channel,
-        `⚠️ Could not unlink Minecraft Username due to a database error.`,
+        `⚠️ Could not unlink Minecraft username due to a database error.`,
       );
     }
   }
@@ -583,7 +589,7 @@ export class AppClient {
       if (!mcName) {
         await this.client.send(
           channel,
-          `⚠️ You must use !link to link your Minecraft Username to your twitch account before using +${cmd}.`,
+          `⚠️ You must use !link to link your Minecraft username to your twitch account before using +${cmd}.`,
         );
         return;
       }
@@ -605,7 +611,7 @@ export class AppClient {
     if (!channelMcName) {
       await this.client.send(
         channel,
-        `⚠️ No linked Minecraft Username for this channel. Please link one using !link.`,
+        `⚠️ No linked Minecraft username for this channel. Please link one using !link.`,
       );
       return;
     }
