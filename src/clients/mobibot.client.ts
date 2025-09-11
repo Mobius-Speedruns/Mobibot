@@ -164,6 +164,7 @@ export class MobibotClient {
         ([key, value]) =>
           (Object.values(SplitName) as string[]).includes(key) && value != null,
       )
+      .sort(([, a], [, b]) => (a as number) - (b as number))
       .map(([key, value]) => `${key}: ${msToTime(value as number)}`);
 
     const sections = [
