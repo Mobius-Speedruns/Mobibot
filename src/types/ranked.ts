@@ -89,7 +89,7 @@ export const MatchSchema = z.object({
   season: z.number(),
   date: z.number(), // in seconds
   players: z.array(UserProfileSchema),
-  seed: MatchSeedSchema.optional(),
+  seed: MatchSeedSchema.optional().nullable(),
   forfeited: z.boolean(),
   result: z.object({
     uuid: z.string().optional().nullable(),
