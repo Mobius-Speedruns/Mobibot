@@ -12,6 +12,7 @@ import {
   MatchesResponse,
   MatchesResponseSchema,
   PLAYER_NOT_FOUND_MESSAGES,
+  RANK_COLOR,
   VSResponse,
   VSResponseSchema,
 } from '../types/ranked';
@@ -57,6 +58,15 @@ export class RankedClient {
     if (!elo) return 'Unranked';
     const idx = BOUNDS.findIndex((b) => elo < b);
     return LABELS[idx];
+  }
+
+  getRankColor(elo: number | null): string | undefined {
+    const label = this.convertToRank(elo);
+    if (label === 'Unranked') return undefined;
+
+    const rank = label.split(' ')[0] as keyof typeof RANK_COLOR;
+
+    return RANK_COLOR[rank];
   }
 
   async getUserData(

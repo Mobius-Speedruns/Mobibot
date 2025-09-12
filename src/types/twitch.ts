@@ -1,5 +1,43 @@
 import z from 'zod';
 
+export enum TwitchColor {
+  Blue = 'blue',
+  BlueViolet = 'blue_violet',
+  CadetBlue = 'cadet_blue',
+  Chocolate = 'chocolate',
+  Coral = 'coral',
+  DodgerBlue = 'dodger_blue',
+  FireBrick = 'fire_brick',
+  GoldenRod = 'golden_rod',
+  Green = 'green',
+  HotPink = 'hot_pink',
+  OrangeRed = 'orange_red',
+  Red = 'red',
+  SeaGreen = 'sea_green',
+  SpringGreen = 'spring_green',
+  YellowGreen = 'yellow_green',
+}
+
+export const TWITCH_COLOR_HEX: Record<TwitchColor, string> = {
+  [TwitchColor.Blue]: '#0000FF',
+  [TwitchColor.BlueViolet]: '#8A2BE2',
+  [TwitchColor.CadetBlue]: '#5F9EA0',
+  [TwitchColor.Chocolate]: '#D2691E',
+  [TwitchColor.Coral]: '#FF7F50',
+  [TwitchColor.DodgerBlue]: '#1E90FF',
+  [TwitchColor.FireBrick]: '#B22222',
+  [TwitchColor.GoldenRod]: '#DAA520',
+  [TwitchColor.Green]: '#008000',
+  [TwitchColor.HotPink]: '#FF69B4',
+  [TwitchColor.OrangeRed]: '#FF4500',
+  [TwitchColor.Red]: '#FF0000',
+  [TwitchColor.SeaGreen]: '#2E8B57',
+  [TwitchColor.SpringGreen]: '#00FF7F',
+  [TwitchColor.YellowGreen]: '#9ACD32',
+};
+
+export const DEFAULT_COLOR = TwitchColor.GoldenRod;
+
 export const AuthResponseSchema = z.object({
   access_token: z.string(),
   refresh_token: z.string(),
@@ -125,3 +163,14 @@ export const RECOVERABLE_CODES = [
   1006, // Abnormal closure (network issues)
   4003, // Connection unused (Twitch-specific)
 ];
+
+export const twitchColorResponseSchema = z.object({
+  data: z.array(
+    z.object({
+      user_id: z.string(),
+      color: z.string(),
+    }),
+  ),
+});
+
+export type TwitchColorResponse = z.infer<typeof twitchColorResponseSchema>;

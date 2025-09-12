@@ -1,4 +1,5 @@
 import z from 'zod';
+import { TwitchColor } from './twitch';
 
 export const BOUNDS = [
   400,
@@ -37,6 +38,15 @@ export const LABELS = [
   'Diamond III',
   'Netherite',
 ] as const;
+
+export enum RANK_COLOR {
+  Coal = TwitchColor.Chocolate,
+  Iron = TwitchColor.CadetBlue,
+  Gold = TwitchColor.GoldenRod,
+  Emerald = TwitchColor.Green,
+  Diamond = TwitchColor.DodgerBlue,
+  Netherite = TwitchColor.BlueViolet,
+}
 
 export enum MatchType {
   'Casual Match' = 1,

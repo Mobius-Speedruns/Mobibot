@@ -3,13 +3,16 @@ import { Logger as PinoLogger } from 'pino';
 import {
   AuthResponse,
   ChatMessageHandler,
+  DEFAULT_COLOR,
   EventSubMessage,
   notificationMessage,
-  RECOVERABLE_CODES,
   sessionReconnectMessage,
   sessionWelcomeMessage,
   Subscriptions,
   SubscriptionsSchema,
+  TWITCH_COLOR_HEX,
+  TwitchColor,
+  TwitchColorResponse,
   UserReponse,
 } from '../types/twitch';
 import WebSocket from 'ws';
@@ -21,6 +24,7 @@ import z from 'zod';
 export class TwitchClient extends EventEmitter {
   private authApi: AxiosInstance;
   private api: AxiosInstance;
+  private userApi: AxiosInstance;
   private messageHandler?: ChatMessageHandler;
   private logger: PinoLogger;
 
@@ -35,9 +39,15 @@ export class TwitchClient extends EventEmitter {
   private oauthRefreshToken: string;
   private oauthExpires: number = 0;
   private oauthToken: string | null = null;
+  private userRefreshToken: string;
+  private userExpires: number = 0;
+  private userToken: string | null = null;
 
   private readyPromise?: Promise<void>;
   private readyResolve?: () => void;
+
+  botColor: TwitchColor = DEFAULT_COLOR;
+  private waitOnColorChangeDelayms: number = 1000;
 
   // Track active subscriptions for re-establishment
   private activeChannels = new Set<string>();
@@ -52,6 +62,7 @@ export class TwitchClient extends EventEmitter {
     this.clientSecret = process.env.CLIENT_SECRET || '';
     this.websocketURL = 'wss://eventsub.wss.twitch.tv/ws';
     this.oauthRefreshToken = process.env.REFRESH_TOKEN || '';
+    this.userRefreshToken = process.env.USER_REFRESH_TOKEN || '';
     this.logger = logger.child({ Service: Service.TWITCH });
 
     this.authApi = axios.create({
@@ -59,6 +70,14 @@ export class TwitchClient extends EventEmitter {
       timeout: 30000,
     });
     this.api = axios.create({
+      baseURL: 'https://api.twitch.tv/',
+      headers: {
+        'Client-Id': this.clientId,
+        'Content-Type': 'application/json',
+      },
+      timeout: 30000,
+    });
+    this.userApi = axios.create({
       baseURL: 'https://api.twitch.tv/',
       headers: {
         'Client-Id': this.clientId,
@@ -76,6 +95,14 @@ export class TwitchClient extends EventEmitter {
       }
       return config;
     });
+    this.userApi.interceptors.request.use(async (config) => {
+      const token = await this.fetchUserToken();
+      if (token) {
+        config.headers = config.headers || {};
+        config.headers['Authorization'] = `Bearer ${token}`;
+      }
+      return config;
+    });
 
     // Interceptors to handle errors
     const handleError = (error: AxiosError) => {
@@ -87,6 +114,7 @@ export class TwitchClient extends EventEmitter {
     };
 
     this.authApi.interceptors.response.use((res) => res, handleError);
+    this.userApi.interceptors.response.use((res) => res, handleError);
     this.api.interceptors.response.use((res) => res, handleError);
   }
 
@@ -167,18 +195,66 @@ export class TwitchClient extends EventEmitter {
     this.messageHandler = handler;
   }
 
-  async send(channelName: string, message: string): Promise<void> {
+  async send(
+    channelName: string,
+    message: string,
+    color?: string,
+  ): Promise<void> {
     const channelId = await this.fetchChannelId(channelName);
+
+    let finalMessage: string = message;
+    if (color) {
+      // Update color if necessary
+      if (!this.compareColor(color as TwitchColor, this.botColor))
+        await this.changeColor(color as TwitchColor);
+      finalMessage = `/me ${message}`;
+    } else {
+      // Return colour to default if changed recently
+      if (!this.compareColor(this.botColor, DEFAULT_COLOR))
+        await this.changeColor(DEFAULT_COLOR);
+    }
+
     const response = await this.api.post('helix/chat/messages', {
       broadcaster_id: channelId,
       sender_id: this.botId,
-      message,
+      message: finalMessage,
+      color: color,
     });
 
     if (response.status != 200) {
       this.logger.error(response.data, 'Failed to send chat message');
     }
-    this.logger.debug(`Sent message in ${channelName}, ${message}`);
+    this.logger.debug(`Sent message in ${channelName}, ${finalMessage}`);
+  }
+
+  private async changeColor(color: TwitchColor): Promise<void> {
+    this.logger.debug(`Changing colour ${color}`);
+    await this.userApi.put('helix/chat/color', {
+      user_id: this.botId,
+      color: color,
+    });
+    // Wait for twitch to update name
+    // No point in trying to call GET /helix/chat/color, twitch will report a color change but still need a second to update in chat.
+    this.botColor = color;
+    // force bot to wait - twitch reports color as changed but chat still takes a second to update
+    await new Promise((resolve) =>
+      setTimeout(resolve, this.waitOnColorChangeDelayms),
+    );
+    return;
+  }
+
+  private compareColor(botColor: TwitchColor, twitchColor: string): boolean {
+    return (
+      botColor.toLowerCase() === twitchColor.toLowerCase() || // string comparison
+      TWITCH_COLOR_HEX[botColor] === twitchColor
+    ); // hex comparison
+  }
+
+  private async getColor(): Promise<string> {
+    const response = await this.userApi.get<TwitchColorResponse>(
+      `helix/chat/color?user_id=${this.botId}`,
+    );
+    return response.data.data[0].color;
   }
 
   private async fetchToken(): Promise<string | null> {
@@ -187,16 +263,36 @@ export class TwitchClient extends EventEmitter {
     if (this.oauthToken && now < this.oauthExpires - 5000) {
       return this.oauthToken;
     }
-    await this.refreshAccessToken();
+    const data = await this.refreshAccessToken(this.oauthRefreshToken);
+    this.oauthToken = data.access_token;
+    this.oauthRefreshToken = data.refresh_token;
+    this.oauthExpires = data.expires;
     return this.oauthToken;
   }
 
-  private async refreshAccessToken(): Promise<void> {
+  private async fetchUserToken(): Promise<string | null> {
+    const now = Date.now();
+    // If token is still valid, return it
+    if (this.userToken && now < this.userExpires - 5000) {
+      return this.userToken;
+    }
+    const data = await this.refreshAccessToken(this.userRefreshToken);
+    this.userToken = data.access_token;
+    this.userRefreshToken = data.refresh_token;
+    this.userExpires = data.expires;
+    return this.userToken;
+  }
+
+  private async refreshAccessToken(refreshToken: string): Promise<{
+    access_token: string;
+    refresh_token: string;
+    expires: number;
+  }> {
     this.logger.info('Refreshing Twitch Token');
     try {
       const body = new URLSearchParams({
         grant_type: 'refresh_token',
-        refresh_token: this.oauthRefreshToken,
+        refresh_token: refreshToken,
         client_id: this.clientId,
         client_secret: this.clientSecret,
       });
@@ -211,9 +307,11 @@ export class TwitchClient extends EventEmitter {
 
       const data = response.data;
 
-      this.oauthToken = data.access_token;
-      this.oauthRefreshToken = data.refresh_token;
-      this.oauthExpires = Date.now() + data.expires_in * 1000;
+      return {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires: Date.now() + data.expires_in * 1000,
+      };
     } catch (err: unknown) {
       const msg = parseError(err);
       this.logger.error(msg);

@@ -244,7 +244,10 @@ export class MobibotClient {
   // -----------------------------
   // Ranked
   // -----------------------------
-  async elo(name: string, season?: number | null): Promise<string> {
+  async elo(
+    name: string,
+    season?: number | null,
+  ): Promise<{ response: string; color: string | undefined }> {
     const userData = await this.ranked.getUserData(name, season);
     const data = userData.data;
     // Statistics
@@ -267,8 +270,11 @@ export class MobibotClient {
       `PB: ${pb ? msToTime(pb) : 'No Completions'} \u2756 Avg: ${completionAvg ? msToTime(completionAvg, false) : 'Unknown'}`,
       `FF Rate: ${forfeitrate.toFixed(1)}%`,
     ].filter(Boolean); // remove empty sections
-
-    return sections.join(' \u2756 ');
+    const color = this.ranked.getRankColor(elo || null);
+    return {
+      response: sections.join(' \u2756 '),
+      color,
+    };
   }
   async lastmatch(name: string, season?: number | null): Promise<string> {
     const matchData = await this.ranked.getRecentMatches(name, season);
@@ -305,7 +311,9 @@ export class MobibotClient {
 
     return sections.join(' \u2756 ');
   }
-  async today(name: string): Promise<string> {
+  async today(
+    name: string,
+  ): Promise<{ response: string; color: string | undefined }> {
     const [userData, recentMatches] = await Promise.all([
       this.ranked.getUserData(name),
       this.ranked.getRecentMatches(name),
@@ -367,8 +375,8 @@ export class MobibotClient {
       `${completionAvg ? msToTime(completionAvg, false) : 'Unknown'} average`,
       `FF Rate: ${forfeitrate.toFixed(1)}%`,
     ].filter(Boolean); // remove empty sections
-
-    return sections.join(' \u2756 ');
+    const color = this.ranked.getRankColor(elo || null);
+    return { response: sections.join(' \u2756 '), color };
   }
   async record(
     name1: string,

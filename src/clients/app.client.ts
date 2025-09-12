@@ -358,37 +358,6 @@ export class AppClient {
     }
   }
 
-  private async refreshLinkedChannels() {
-    const linkedChannels = await this.db.getAllChannels();
-
-    for (const channel of linkedChannels) {
-      if (!channel.mc_name) continue;
-      try {
-        const mcName = await this.mobibotClient.getRealNickname(
-          channel.mc_name,
-        );
-
-        if (!mcName) {
-          this.logger.warn(
-            `Could not find MC username for ${channel.name}: ${channel.mc_name}`,
-          );
-          continue;
-        }
-
-        // Upsert back into the database to update timestamp
-        await this.db.upsertChannel(channel.name, mcName);
-        this.logger.info(
-          `Refreshed MC username for ${channel.name}: ${mcName}`,
-        );
-      } catch (err) {
-        this.logger.error(
-          err,
-          `Failed to refresh MC username for ${channel.name}`,
-        );
-      }
-    }
-  }
-
   // -----------------------------
   // Command Routing
   // -----------------------------
@@ -399,6 +368,7 @@ export class AppClient {
     args: string[],
   ): Promise<void> {
     let response: string | void;
+    let color: string | undefined = undefined;
 
     if (!NO_ARGUMENT.includes(cmd as BotCommand)) {
       if (!mcName) {
@@ -485,14 +455,18 @@ export class AppClient {
         break;
       case BotCommand.ELO: {
         const season = this.parseIntArg(args[0]) || undefined;
-        response = await this.mobibotClient.elo(mcName, season);
+        const data = await this.mobibotClient.elo(mcName, season);
+        response = data.response;
+        color = data.color;
         break;
       }
       case BotCommand.LASTMATCH:
         response = await this.mobibotClient.lastmatch(mcName);
         break;
       case BotCommand.TODAY:
-        response = await this.mobibotClient.today(mcName);
+        const data = await this.mobibotClient.today(mcName);
+        response = data.response;
+        color = data.color;
         break;
       case BotCommand.SEEDWAVE:
         response = await this.mobibotClient.seedwave();
@@ -547,7 +521,7 @@ export class AppClient {
     }
 
     if (response) {
-      await this.client.send(channel, response);
+      await this.client.send(channel, response, color);
     }
   }
 
