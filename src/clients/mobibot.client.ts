@@ -231,6 +231,7 @@ export class MobibotClient {
     const wastedTime = nph.playtime - inSeedPlaytime;
 
     const sections = [
+      `${appendInvisibleChars(name)} Wasted Time`,
       `${msToTime(wastedTime / session.nether.count, false)} avg wasted time spent per enter`,
       `${msToTime(wastedTime, false)} total wasted time (${((wastedTime / nph.playtime) * 100).toFixed(1)}%)`,
       `${msToTime(inSeedPlaytime, false)} spent in overworlds that entered (${((inSeedPlaytime / nph.playtime) * 100).toFixed(1)}%)`,
