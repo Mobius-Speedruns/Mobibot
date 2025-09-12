@@ -425,6 +425,8 @@ export class MobibotClient {
     const winsByType: WinsByType = matchData.reduce((acc, match) => {
       const seed = match.seed;
       if (!seed) return acc;
+      // Ignore draws
+      if (!match.result.uuid) return acc;
       const isWin = match.result.uuid === uuid;
       const isRanked = match.type === MatchType['Ranked Match'];
       if (!isRanked) return acc;
@@ -450,7 +452,9 @@ export class MobibotClient {
 
     // Overall Statistics
     const totalWins = userData.data.statistics.season.wins.ranked;
-    const totalMatches = userData.data.statistics.season.playedMatches.ranked;
+    const totalMatches =
+      userData.data.statistics.season.wins.ranked +
+      userData.data.statistics.season.loses.ranked;
     const totalWinrate = (totalWins / totalMatches) * 100;
 
     const sections = [
@@ -506,6 +510,8 @@ export class MobibotClient {
       (acc, match) => {
         const seed = match.seed;
         if (!seed) return acc;
+        // Ignore draws
+        if (!match.result.uuid) return acc;
         const isRanked = match.type === MatchType['Ranked Match'];
         if (!isRanked) return acc;
         // No completion if the match was forfeited or lost.
