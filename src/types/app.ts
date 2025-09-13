@@ -10,7 +10,7 @@ export enum Service {
 }
 
 // Defaults for hours and hoursBetween
-export const HOURS = 100;
+export const HOURS = 1000;
 export const HOURS_BETWEEN = 1;
 
 export enum BotCommand {
