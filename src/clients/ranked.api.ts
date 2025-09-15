@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import { type Logger as PinoLogger } from 'pino';
+
 import { Service } from '../types/app';
 import {
   BOUNDS,
@@ -54,88 +55,10 @@ export class RankedClient {
     );
   }
 
-  convertToRank(elo: number | null): string {
+  convertToRank(elo: null | number): string {
     if (!elo) return 'Unranked';
     const idx = BOUNDS.findIndex((b) => elo < b);
     return LABELS[idx];
-  }
-
-  getRankColor(elo: number | null): string | undefined {
-    const label = this.convertToRank(elo);
-    if (label === 'Unranked') return undefined;
-
-    const rank = label.split(' ')[0] as keyof typeof RANK_COLOR;
-
-    return RANK_COLOR[rank];
-  }
-
-  async getUserData(
-    name: string,
-    season?: number | null,
-  ): Promise<GetUserDataResponse> {
-    this.logger.debug(`Handling /users/${name}, season: ${season}`);
-
-    const params: Record<string, string | number> = {};
-    if (season) params.season = season;
-
-    const { data } = await this.api.get<GetUserDataResponse>(`/users/${name}`, {
-      params,
-    });
-
-    const parsedData = GetUserDataResponseSchema.parse(data);
-    if (!parsedData) {
-      this.logger.error(data, 'Invalid response from getUserData');
-      throw new Error('Invalid response from getUserData');
-    }
-
-    return parsedData;
-  }
-
-  async getRecentMatches(
-    name: string,
-    season?: number | null,
-  ): Promise<MatchesResponse> {
-    this.logger.debug(`Handling /users/${name}/matches, season: ${season}`);
-
-    const params: Record<string, string | number> = {};
-    if (season) params.season = season;
-
-    const { data } = await this.api.get<MatchesResponse>(
-      `/users/${name}/matches`,
-      { params },
-    );
-    const parsedData = MatchesResponseSchema.parse(data);
-    if (!parsedData) {
-      this.logger.error(data, 'Invalid response from getRecentMatches');
-      throw new Error('Invalid response from getUserData');
-    }
-
-    return parsedData;
-  }
-
-  async getVersusData(
-    name1: string,
-    name2: string,
-    season?: number | null,
-  ): Promise<VSResponse> {
-    this.logger.debug(
-      `Handling /users/${name1}/versus/${name2}, season: ${season}`,
-    );
-
-    const params: Record<string, string | number> = {};
-    if (season) params.season = season;
-
-    const response = await this.api.get<VSResponse>(
-      `/users/${name1}/versus/${name2}`,
-      { params },
-    );
-    const parsedData = VSResponseSchema.parse(response.data);
-    if (!parsedData) {
-      this.logger.error({ parsedData }, 'Invalid response from getVersusData');
-      throw new Error('Invalid response from getVersusData');
-    }
-
-    return parsedData;
   }
 
   async getAllMatches(
@@ -149,7 +72,7 @@ export class RankedClient {
     let moreRunsAvailable = true;
 
     while (moreRunsAvailable) {
-      const params: Record<string, string | number> = {
+      const params: Record<string, number | string> = {
         count: 100,
         sort: 'newest',
       };
@@ -179,10 +102,24 @@ export class RankedClient {
     return all;
   }
 
+  async getCurrentSeason(): Promise<number> {
+    this.logger.debug(`Handling /getCurrentSeason`);
+
+    const { data } = await this.api.get<LeaderboardResponse>(`/leaderboard`);
+
+    const parsedData = LeaderboardResponseSchema.parse(data);
+    if (!parsedData) {
+      this.logger.error(data, 'Invalid response from getUserData');
+      throw new Error('Invalid response from getUserData');
+    }
+
+    return parsedData.data.season.number;
+  }
+
   async getLeaderboard(season?: number): Promise<LeaderboardResponse> {
     this.logger.debug(`Handling /leaderboard`);
 
-    const params: Record<string, string | number> = {};
+    const params: Record<string, number | string> = {};
     if (season) params.season = season;
 
     const { data } = await this.api.get<LeaderboardResponse>(`/leaderboard`, {
@@ -198,17 +135,81 @@ export class RankedClient {
     return parsedData;
   }
 
-  async getCurrentSeason(): Promise<number> {
-    this.logger.debug(`Handling /getCurrentSeason`);
+  getRankColor(elo: null | number): string | undefined {
+    const label = this.convertToRank(elo);
+    if (label === 'Unranked') return undefined;
 
-    const { data } = await this.api.get<LeaderboardResponse>(`/leaderboard`);
+    const rank = label.split(' ')[0] as keyof typeof RANK_COLOR;
 
-    const parsedData = LeaderboardResponseSchema.parse(data);
+    return RANK_COLOR[rank];
+  }
+
+  async getRecentMatches(
+    name: string,
+    season?: null | number,
+  ): Promise<MatchesResponse> {
+    this.logger.debug(`Handling /users/${name}/matches, season: ${season}`);
+
+    const params: Record<string, number | string> = {};
+    if (season) params.season = season;
+
+    const { data } = await this.api.get<MatchesResponse>(
+      `/users/${name}/matches`,
+      { params },
+    );
+    const parsedData = MatchesResponseSchema.parse(data);
+    if (!parsedData) {
+      this.logger.error(data, 'Invalid response from getRecentMatches');
+      throw new Error('Invalid response from getUserData');
+    }
+
+    return parsedData;
+  }
+
+  async getUserData(
+    name: string,
+    season?: null | number,
+  ): Promise<GetUserDataResponse> {
+    this.logger.debug(`Handling /users/${name}, season: ${season}`);
+
+    const params: Record<string, number | string> = {};
+    if (season) params.season = season;
+
+    const { data } = await this.api.get<GetUserDataResponse>(`/users/${name}`, {
+      params,
+    });
+
+    const parsedData = GetUserDataResponseSchema.parse(data);
     if (!parsedData) {
       this.logger.error(data, 'Invalid response from getUserData');
       throw new Error('Invalid response from getUserData');
     }
 
-    return parsedData.data.season.number;
+    return parsedData;
+  }
+
+  async getVersusData(
+    name1: string,
+    name2: string,
+    season?: null | number,
+  ): Promise<VSResponse> {
+    this.logger.debug(
+      `Handling /users/${name1}/versus/${name2}, season: ${season}`,
+    );
+
+    const params: Record<string, number | string> = {};
+    if (season) params.season = season;
+
+    const response = await this.api.get<VSResponse>(
+      `/users/${name1}/versus/${name2}`,
+      { params },
+    );
+    const parsedData = VSResponseSchema.parse(response.data);
+    if (!parsedData) {
+      this.logger.error({ parsedData }, 'Invalid response from getVersusData');
+      throw new Error('Invalid response from getVersusData');
+    }
+
+    return parsedData;
   }
 }

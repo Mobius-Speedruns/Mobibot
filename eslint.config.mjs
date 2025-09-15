@@ -1,5 +1,6 @@
 import eslint from '@eslint/js';
 import tselint from 'typescript-eslint';
+import perfectionist from 'eslint-plugin-perfectionist';
 import eslintPluginPrettierRecommend from 'eslint-plugin-prettier/recommended';
 import globals from 'globals';
 
@@ -7,6 +8,7 @@ export default tselint.config(
   {
     ignores: ['eslint.config.mjs'],
   },
+  perfectionist.configs['recommended-alphabetical'],
   eslint.configs.recommended,
   ...tselint.configs.recommendedTypeChecked,
   eslintPluginPrettierRecommend,

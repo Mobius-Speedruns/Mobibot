@@ -40,39 +40,39 @@ export const DEFAULT_COLOR = TwitchColor.GoldenRod;
 
 export const AuthResponseSchema = z.object({
   access_token: z.string(),
-  refresh_token: z.string(),
   expires_in: z.number(),
+  refresh_token: z.string(),
   scope: z.array(z.string()),
 });
 export const UserResponseSchema = z.object({
   data: z.array(
     z.object({
+      broadcaster_type: z.string(),
       id: z.string(),
       login: z.string(),
-      broadcaster_type: z.string(),
     }),
   ),
 });
 export const SubscriptionsSchema = z.object({
   data: z.array(
     z.object({
-      id: z.string(),
       condition: z.object({
         broadcaster_user_id: z.string(),
       }),
+      id: z.string(),
     }),
   ),
 });
 
 export type AuthResponse = z.infer<typeof AuthResponseSchema>;
-export type UserReponse = z.infer<typeof UserResponseSchema>;
 export type Subscriptions = z.infer<typeof SubscriptionsSchema>;
-
 export interface TwitchMessage {
   broadcaster: string;
-  user: string;
   text: string;
+  user: string;
 }
+
+export type UserReponse = z.infer<typeof UserResponseSchema>;
 
 export const chatEventPayload = z.object({
   event: z.object({
@@ -91,17 +91,17 @@ export const chatEventPayload = z.object({
 
 export const sessionWelcomeEventPayload = z.object({
   session: z.object({
-    id: z.string(),
-    status: z.string(),
     connected_at: z.string(),
+    id: z.string(),
     keepalive_timeout_seconds: z.number(),
+    status: z.string(),
   }),
 });
 
 const baseMetadata = z.object({
   message_id: z.string(),
-  message_type: z.string(),
   message_timestamp: z.string(),
+  message_type: z.string(),
   subscription_type: z.string().optional(),
 });
 
@@ -126,11 +126,11 @@ export const sessionReconnectMessage = z.object({
   }),
   payload: z.object({
     session: z.object({
-      id: z.string(),
-      status: z.string(),
       connected_at: z.string(),
+      id: z.string(),
       keepalive_timeout_seconds: z.number(),
       reconnect_url: z.string(),
+      status: z.string(),
     }),
   }),
 });
@@ -147,17 +147,17 @@ export const eventSubMessage = z.union([
   sessionKeepAlive,
   sessionReconnectMessage,
 ]);
-export type EventSubMessage = z.infer<typeof eventSubMessage>;
-
-export interface ChatTags {
-  username?: string;
-}
-
 export type ChatMessageHandler = (
   channel: string,
   tags: ChatTags,
   message: string,
 ) => void;
+
+export interface ChatTags {
+  username?: string;
+}
+
+export type EventSubMessage = z.infer<typeof eventSubMessage>;
 
 export const RECOVERABLE_CODES = [
   1006, // Abnormal closure (network issues)
@@ -167,8 +167,8 @@ export const RECOVERABLE_CODES = [
 export const twitchColorResponseSchema = z.object({
   data: z.array(
     z.object({
-      user_id: z.string(),
       color: z.string(),
+      user_id: z.string(),
     }),
   ),
 });

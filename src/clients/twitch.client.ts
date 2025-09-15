@@ -1,5 +1,10 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
+import { EventEmitter } from 'events';
 import { Logger as PinoLogger } from 'pino';
+import WebSocket from 'ws';
+import z from 'zod';
+
+import { Service } from '../types/app';
 import {
   AuthResponse,
   ChatMessageHandler,
@@ -15,51 +20,47 @@ import {
   TwitchColorResponse,
   UserReponse,
 } from '../types/twitch';
-import WebSocket from 'ws';
-import { EventEmitter } from 'events';
-import { Service } from '../types/app';
 import { parseError } from '../util/parseError';
-import z from 'zod';
 
 export class TwitchClient extends EventEmitter {
-  private authApi: AxiosInstance;
+  botColor: TwitchColor = DEFAULT_COLOR;
+  // Track active subscriptions for re-establishment
+  private activeChannels = new Set<string>();
   private api: AxiosInstance;
-  private userApi: AxiosInstance;
-  private messageHandler?: ChatMessageHandler;
-  private logger: PinoLogger;
-
-  private websocket?: WebSocket;
-  private sessionId?: string;
-
+  private authApi: AxiosInstance;
   private botId: string;
+
   private clientId: string;
   private clientSecret: string;
 
-  private websocketURL: string;
-  private oauthRefreshToken: string;
-  private oauthExpires: number = 0;
-  private oauthToken: string | null = null;
-  private userRefreshToken: string;
-  private userExpires: number = 0;
-  private userToken: string | null = null;
-
-  private readyPromise?: Promise<void>;
-  private readyResolve?: () => void;
-
-  botColor: TwitchColor = DEFAULT_COLOR;
-  private waitOnColorChangeDelayms: number = 1000;
-
-  // Track active subscriptions for re-establishment
-  private activeChannels = new Set<string>();
-
-  // For handling Twitch-initiated reconnects
-  private reconnectWebSocket?: WebSocket;
+  private readonly HEARTBEAT_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
+  private heartbeatInterval?: NodeJS.Timeout;
+  private readonly KEEPALIVE_TIMEOUT_MS = 60 * 5 * 1000; // 5 minutes
 
   // Heartbeat tracking
   private lastKeepaliveTime: number = 0;
-  private heartbeatInterval?: NodeJS.Timeout;
-  private readonly KEEPALIVE_TIMEOUT_MS = 60 * 5 * 1000; // 5 minutes
-  private readonly HEARTBEAT_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
+  private logger: PinoLogger;
+  private messageHandler?: ChatMessageHandler;
+  private oauthExpires: number = 0;
+  private oauthRefreshToken: string;
+  private oauthToken: null | string = null;
+  private readyPromise?: Promise<void>;
+
+  private readyResolve?: () => void;
+  // For handling Twitch-initiated reconnects
+  private reconnectWebSocket?: WebSocket;
+
+  private sessionId?: string;
+  private userApi: AxiosInstance;
+
+  private userExpires: number = 0;
+
+  private userRefreshToken: string;
+
+  private userToken: null | string = null;
+  private waitOnColorChangeDelayms: number = 1000;
+  private websocket?: WebSocket;
+  private websocketURL: string;
 
   constructor(logger: PinoLogger) {
     super();
@@ -134,6 +135,43 @@ export class TwitchClient extends EventEmitter {
     }));
   }
 
+  // Send messages to event handler
+  onChatMessage(handler: ChatMessageHandler) {
+    this.messageHandler = handler;
+  }
+
+  async send(
+    channelName: string,
+    message: string,
+    color?: string,
+  ): Promise<void> {
+    const channelId = await this.fetchChannelId(channelName);
+
+    let finalMessage: string = message;
+    if (color) {
+      // Update color if necessary
+      if (!this.compareColor(color as TwitchColor, this.botColor))
+        await this.changeColor(color as TwitchColor);
+      finalMessage = `/me ${message}`;
+    } else {
+      // Return colour to default if changed recently
+      if (!this.compareColor(this.botColor, DEFAULT_COLOR))
+        await this.changeColor(DEFAULT_COLOR);
+    }
+
+    const response = await this.api.post('helix/chat/messages', {
+      broadcaster_id: channelId,
+      color: color,
+      message: finalMessage,
+      sender_id: this.botId,
+    });
+
+    if (response.status != 200) {
+      this.logger.error(response.data, 'Failed to send chat message');
+    }
+    this.logger.debug(`Sent message in ${channelName}, ${finalMessage}`);
+  }
+
   // Subscribe to chat messages for a specific channel
   async subscribe(channelName: string) {
     if (!this.sessionId) {
@@ -145,8 +183,6 @@ export class TwitchClient extends EventEmitter {
     this.activeChannels.add(channelName);
 
     const body = {
-      type: 'channel.chat.message',
-      version: '1',
       condition: {
         broadcaster_user_id: broadcasterUserId,
         user_id: this.botId,
@@ -155,6 +191,8 @@ export class TwitchClient extends EventEmitter {
         method: 'websocket',
         session_id: this.sessionId,
       },
+      type: 'channel.chat.message',
+      version: '1',
     };
 
     const response = await this.api.post('helix/eventsub/subscriptions', body);
@@ -196,81 +234,11 @@ export class TwitchClient extends EventEmitter {
     }
   }
 
-  // Send messages to event handler
-  onChatMessage(handler: ChatMessageHandler) {
-    this.messageHandler = handler;
-  }
-
-  async send(
-    channelName: string,
-    message: string,
-    color?: string,
-  ): Promise<void> {
-    const channelId = await this.fetchChannelId(channelName);
-
-    let finalMessage: string = message;
-    if (color) {
-      // Update color if necessary
-      if (!this.compareColor(color as TwitchColor, this.botColor))
-        await this.changeColor(color as TwitchColor);
-      finalMessage = `/me ${message}`;
-    } else {
-      // Return colour to default if changed recently
-      if (!this.compareColor(this.botColor, DEFAULT_COLOR))
-        await this.changeColor(DEFAULT_COLOR);
-    }
-
-    const response = await this.api.post('helix/chat/messages', {
-      broadcaster_id: channelId,
-      sender_id: this.botId,
-      message: finalMessage,
-      color: color,
-    });
-
-    if (response.status != 200) {
-      this.logger.error(response.data, 'Failed to send chat message');
-    }
-    this.logger.debug(`Sent message in ${channelName}, ${finalMessage}`);
-  }
-
-  private startHeartbeat(): void {
-    this.stopHeartbeat();
-
-    this.lastKeepaliveTime = Date.now();
-
-    this.logger.debug('Starting heartbeat monitoring');
-
-    this.heartbeatInterval = setInterval(() => {
-      const now = Date.now();
-      const timeSinceLastKeepalive = now - this.lastKeepaliveTime;
-
-      if (timeSinceLastKeepalive > this.KEEPALIVE_TIMEOUT_MS) {
-        this.logger.warn(
-          `No keepalive received for ${timeSinceLastKeepalive}ms, reconnecting`,
-        );
-        this.stopHeartbeat();
-        this.handleReconnect(this.websocketURL);
-      }
-    }, this.HEARTBEAT_CHECK_INTERVAL_MS);
-  }
-
-  private stopHeartbeat(): void {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = undefined;
-      this.logger.debug('Stopped heartbeat monitoring');
-    }
-  }
-
-  private updateKeepaliveTime(): void {
-    this.lastKeepaliveTime = Date.now();
-  }
-
   private async changeColor(color: TwitchColor): Promise<void> {
     this.logger.debug(`Changing colour ${color}`);
     await this.userApi.put('helix/chat/color', {
-      user_id: this.botId,
       color: color,
+      user_id: this.botId,
     });
     // Wait for twitch to update name
     // No point in trying to call GET /helix/chat/color, twitch will report a color change but still need a second to update in chat.
@@ -289,14 +257,38 @@ export class TwitchClient extends EventEmitter {
     ); // hex comparison
   }
 
-  private async getColor(): Promise<string> {
-    const response = await this.userApi.get<TwitchColorResponse>(
-      `helix/chat/color?user_id=${this.botId}`,
-    );
-    return response.data.data[0].color;
+  private async fetchChannelId(channelName: string): Promise<string> {
+    const response = await this.api.get<UserReponse>('helix/users', {
+      params: {
+        login: channelName,
+      },
+    });
+    if (response.data.data.length === 0) {
+      this.logger.error(response, 'Response from fetchChannelId');
+      throw new Error('Cannot find channel.');
+    }
+
+    return response.data.data[0].id;
   }
 
-  private async fetchToken(): Promise<string | null> {
+  private async fetchSubscriptions(): Promise<Subscriptions> {
+    const { data } = await this.api.get<Subscriptions>(
+      'helix/eventsub/subscriptions',
+      {
+        params: {
+          status: 'enabled',
+        },
+      },
+    );
+    const parsedData = SubscriptionsSchema.parse(data);
+    if (!parsedData) {
+      this.logger.error(data, 'Invalid response from fetchSubscriptions');
+      throw new Error('Invalid response from fetchSubscriptions');
+    }
+    return parsedData;
+  }
+
+  private async fetchToken(): Promise<null | string> {
     const now = Date.now();
     // If token is still valid, return it
     if (this.oauthToken && now < this.oauthExpires - 5000) {
@@ -309,7 +301,7 @@ export class TwitchClient extends EventEmitter {
     return this.oauthToken;
   }
 
-  private async fetchUserToken(): Promise<string | null> {
+  private async fetchUserToken(): Promise<null | string> {
     const now = Date.now();
     // If token is still valid, return it
     if (this.userToken && now < this.userExpires - 5000) {
@@ -322,76 +314,25 @@ export class TwitchClient extends EventEmitter {
     return this.userToken;
   }
 
-  private async refreshAccessToken(refreshToken: string): Promise<{
-    access_token: string;
-    refresh_token: string;
-    expires: number;
-  }> {
-    this.logger.info('Refreshing Twitch Token');
+  private async getColor(): Promise<string> {
+    const response = await this.userApi.get<TwitchColorResponse>(
+      `helix/chat/color?user_id=${this.botId}`,
+    );
+    return response.data.data[0].color;
+  }
+
+  private handleReconnect(reconnectUrl: string): void {
+    this.logger.info('Starting Twitch-initiated reconnect process');
+
+    // Stop heartbeat for current connection
+    this.stopHeartbeat();
+
     try {
-      const body = new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-      });
-
-      const response = await this.authApi.post<AuthResponse>(
-        'token',
-        body.toString(),
-        {
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        },
-      );
-
-      const data = response.data;
-
-      return {
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
-        expires: Date.now() + data.expires_in * 1000,
-      };
-    } catch (err: unknown) {
-      const msg = parseError(err);
-      this.logger.error(msg);
-      throw new Error(`Failed to refresh Twitch token`);
+      this.reconnectWebSocket = this.startWebSocket(reconnectUrl);
+    } catch (error) {
+      this.logger.error(error, 'Failed to create reconnect WebSocket');
+      throw error;
     }
-  }
-
-  private async validateAuth(): Promise<void> {
-    await this.fetchToken();
-    // Validate token
-    const response = await this.authApi.get('validate', {
-      headers: {
-        Authorization: 'OAuth ' + this.oauthToken,
-      },
-    });
-
-    if (response.status != 200) {
-      this.logger.error(
-        'Token is not valid. /oauth2/validate returned status code ' +
-          response.status,
-      );
-      // Do nothing, await next refresh.
-    }
-  }
-
-  private isSessionWelcome(
-    msg: EventSubMessage,
-  ): msg is z.infer<typeof sessionWelcomeMessage> {
-    return msg.metadata.message_type === 'session_welcome';
-  }
-
-  private isNotification(
-    msg: EventSubMessage,
-  ): msg is z.infer<typeof notificationMessage> {
-    return msg.metadata.message_type === 'notification';
-  }
-
-  private isReconnectMessage(
-    msg: EventSubMessage,
-  ): msg is z.infer<typeof sessionReconnectMessage> {
-    return msg.metadata.message_type === 'session_reconnect';
   }
 
   private async handleWebSocketMessage(message: EventSubMessage) {
@@ -472,18 +413,22 @@ export class TwitchClient extends EventEmitter {
     this.logger.debug(message, 'Unhandled Message');
   }
 
-  private handleReconnect(reconnectUrl: string): void {
-    this.logger.info('Starting Twitch-initiated reconnect process');
+  private isNotification(
+    msg: EventSubMessage,
+  ): msg is z.infer<typeof notificationMessage> {
+    return msg.metadata.message_type === 'notification';
+  }
 
-    // Stop heartbeat for current connection
-    this.stopHeartbeat();
+  private isReconnectMessage(
+    msg: EventSubMessage,
+  ): msg is z.infer<typeof sessionReconnectMessage> {
+    return msg.metadata.message_type === 'session_reconnect';
+  }
 
-    try {
-      this.reconnectWebSocket = this.startWebSocket(reconnectUrl);
-    } catch (error) {
-      this.logger.error(error, 'Failed to create reconnect WebSocket');
-      throw error;
-    }
+  private isSessionWelcome(
+    msg: EventSubMessage,
+  ): msg is z.infer<typeof sessionWelcomeMessage> {
+    return msg.metadata.message_type === 'session_welcome';
   }
 
   private async reestablishSubscriptions(): Promise<void> {
@@ -508,6 +453,63 @@ export class TwitchClient extends EventEmitter {
         // Don't re-add to activeChannels if subscription failed
       }
     }
+  }
+
+  private async refreshAccessToken(refreshToken: string): Promise<{
+    access_token: string;
+    expires: number;
+    refresh_token: string;
+  }> {
+    this.logger.info('Refreshing Twitch Token');
+    try {
+      const body = new URLSearchParams({
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      });
+
+      const response = await this.authApi.post<AuthResponse>(
+        'token',
+        body.toString(),
+        {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        },
+      );
+
+      const data = response.data;
+
+      return {
+        access_token: data.access_token,
+        expires: Date.now() + data.expires_in * 1000,
+        refresh_token: data.refresh_token,
+      };
+    } catch (err: unknown) {
+      const msg = parseError(err);
+      this.logger.error(msg);
+      throw new Error(`Failed to refresh Twitch token`);
+    }
+  }
+
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+
+    this.lastKeepaliveTime = Date.now();
+
+    this.logger.debug('Starting heartbeat monitoring');
+
+    this.heartbeatInterval = setInterval(() => {
+      const now = Date.now();
+      const timeSinceLastKeepalive = now - this.lastKeepaliveTime;
+
+      if (timeSinceLastKeepalive > this.KEEPALIVE_TIMEOUT_MS) {
+        this.logger.warn(
+          `No keepalive received for ${timeSinceLastKeepalive}ms, reconnecting`,
+        );
+        this.stopHeartbeat();
+        this.handleReconnect(this.websocketURL);
+      }
+    }, this.HEARTBEAT_CHECK_INTERVAL_MS);
   }
 
   private startWebSocket(url?: string): WebSocket {
@@ -552,34 +554,33 @@ export class TwitchClient extends EventEmitter {
     return ws;
   }
 
-  private async fetchChannelId(channelName: string): Promise<string> {
-    const response = await this.api.get<UserReponse>('helix/users', {
-      params: {
-        login: channelName,
-      },
-    });
-    if (response.data.data.length === 0) {
-      this.logger.error(response, 'Response from fetchChannelId');
-      throw new Error('Cannot find channel.');
+  private stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = undefined;
+      this.logger.debug('Stopped heartbeat monitoring');
     }
-
-    return response.data.data[0].id;
   }
 
-  private async fetchSubscriptions(): Promise<Subscriptions> {
-    const { data } = await this.api.get<Subscriptions>(
-      'helix/eventsub/subscriptions',
-      {
-        params: {
-          status: 'enabled',
-        },
+  private updateKeepaliveTime(): void {
+    this.lastKeepaliveTime = Date.now();
+  }
+
+  private async validateAuth(): Promise<void> {
+    await this.fetchToken();
+    // Validate token
+    const response = await this.authApi.get('validate', {
+      headers: {
+        Authorization: 'OAuth ' + this.oauthToken,
       },
-    );
-    const parsedData = SubscriptionsSchema.parse(data);
-    if (!parsedData) {
-      this.logger.error(data, 'Invalid response from fetchSubscriptions');
-      throw new Error('Invalid response from fetchSubscriptions');
+    });
+
+    if (response.status != 200) {
+      this.logger.error(
+        'Token is not valid. /oauth2/validate returned status code ' +
+          response.status,
+      );
+      // Do nothing, await next refresh.
     }
-    return parsedData;
   }
 }

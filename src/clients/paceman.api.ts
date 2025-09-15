@@ -1,22 +1,23 @@
 // src/clients/PacemanClient.ts
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import { type Logger as PinoLogger } from 'pino';
+
+import { Service } from '../types/app';
 import {
-  Session,
-  sessionSchema,
-  recentRunSchema,
-  NPH,
-  nphSchema,
-  RecentRuns,
-  pbSchema,
-  PB,
-  World,
-  worldSchema,
   Day,
   Leaderboard,
+  NPH,
+  nphSchema,
+  PB,
+  pbSchema,
+  RecentRuns,
+  recentRunSchema,
+  Session,
+  sessionSchema,
   User,
+  World,
+  worldSchema,
 } from '../types/paceman';
-import { Service } from '../types/app';
 
 export class PacemanClient {
   private api: AxiosInstance;
@@ -40,18 +41,48 @@ export class PacemanClient {
     );
   }
 
-  async getWorld(id: number): Promise<World> {
-    this.logger.debug(`Handling /getWorld ${id}`);
-    const { data } = await this.api.get<World>('/getWorld', {
-      params: {
-        worldId: id,
-      },
+  async getAllUsers(): Promise<User[]> {
+    this.logger.debug(`Handling /getAllUsers`);
+
+    const { data } = await this.api.get<User[]>('/getAllUsers');
+
+    return data;
+  }
+
+  async getLeaderboard(
+    days: Day,
+    type: string = 'fastest',
+    category: string = 'finish',
+  ): Promise<Leaderboard[]> {
+    this.logger.debug(`Handling /getLeaderboard`);
+
+    const params: Record<string, number | string> = { category, days, type };
+
+    const { data } = await this.api.get<Leaderboard[]>('/getLeaderboard', {
+      params,
     });
 
-    const parsedData = worldSchema.parse(data);
+    return data;
+  }
+
+  async getNPH(
+    name: string,
+    hours?: number,
+    hoursBetween?: number,
+  ): Promise<NPH> {
+    this.logger.debug(`Handling /getNPH ${name}`);
+    const params: Record<string, number | string> = { name };
+
+    // Let paceman handle defaults if none specified
+    if (hours !== undefined) params.hours = hours;
+    if (hoursBetween !== undefined) params.hoursBetween = hoursBetween;
+
+    const { data } = await this.api.get<NPH>('/getNPH', { params });
+
+    const parsedData = nphSchema.parse(data);
     if (!parsedData) {
-      this.logger.error(data, 'Invalid response from getWorld');
-      throw new Error('Invalid response from getWorld');
+      this.logger.error(data, 'Invalid response from getNPH');
+      throw new Error('Invalid response from getNPH');
     }
 
     return parsedData;
@@ -60,11 +91,31 @@ export class PacemanClient {
   async getPBs(names: string): Promise<PB> {
     this.logger.debug(`Handling /getPBs ${names}`);
 
-    const params: Record<string, string | number> = { names };
+    const params: Record<string, number | string> = { names };
 
     const { data } = await this.api.get<PB>('/getPBs', { params });
 
     const parsedData = pbSchema.parse(data);
+    if (!parsedData) {
+      this.logger.error(data, 'Invalid response from getRecentRuns');
+      throw new Error('Invalid response from getRecentRuns');
+    }
+
+    return parsedData;
+  }
+
+  async getRecentRuns(name: string, limit?: number): Promise<RecentRuns> {
+    this.logger.debug(`Handling /getRecentRuns ${name}`);
+
+    const params: Record<string, number | string> = { name };
+    if (limit !== undefined) params.limit = limit;
+    else params.limit = 1;
+
+    const { data } = await this.api.get<RecentRuns>('/getRecentRuns', {
+      params,
+    });
+
+    const parsedData = recentRunSchema.parse(data);
     if (!parsedData) {
       this.logger.error(data, 'Invalid response from getRecentRuns');
       throw new Error('Invalid response from getRecentRuns');
@@ -79,7 +130,7 @@ export class PacemanClient {
     hoursBetween?: number,
   ): Promise<Session> {
     this.logger.debug(`Handling /getSessionStats ${name}`);
-    const params: Record<string, string | number> = { name };
+    const params: Record<string, number | string> = { name };
 
     // Let paceman handle defaults if none specified
     if (hours !== undefined) params.hours = hours;
@@ -97,70 +148,20 @@ export class PacemanClient {
     return parsedData;
   }
 
-  async getRecentRuns(name: string, limit?: number): Promise<RecentRuns> {
-    this.logger.debug(`Handling /getRecentRuns ${name}`);
-
-    const params: Record<string, string | number> = { name };
-    if (limit !== undefined) params.limit = limit;
-    else params.limit = 1;
-
-    const { data } = await this.api.get<RecentRuns>('/getRecentRuns', {
-      params,
+  async getWorld(id: number): Promise<World> {
+    this.logger.debug(`Handling /getWorld ${id}`);
+    const { data } = await this.api.get<World>('/getWorld', {
+      params: {
+        worldId: id,
+      },
     });
 
-    const parsedData = recentRunSchema.parse(data);
+    const parsedData = worldSchema.parse(data);
     if (!parsedData) {
-      this.logger.error(data, 'Invalid response from getRecentRuns');
-      throw new Error('Invalid response from getRecentRuns');
+      this.logger.error(data, 'Invalid response from getWorld');
+      throw new Error('Invalid response from getWorld');
     }
 
     return parsedData;
-  }
-
-  async getNPH(
-    name: string,
-    hours?: number,
-    hoursBetween?: number,
-  ): Promise<NPH> {
-    this.logger.debug(`Handling /getNPH ${name}`);
-    const params: Record<string, string | number> = { name };
-
-    // Let paceman handle defaults if none specified
-    if (hours !== undefined) params.hours = hours;
-    if (hoursBetween !== undefined) params.hoursBetween = hoursBetween;
-
-    const { data } = await this.api.get<NPH>('/getNPH', { params });
-
-    const parsedData = nphSchema.parse(data);
-    if (!parsedData) {
-      this.logger.error(data, 'Invalid response from getNPH');
-      throw new Error('Invalid response from getNPH');
-    }
-
-    return parsedData;
-  }
-
-  async getLeaderboard(
-    days: Day,
-    type: string = 'fastest',
-    category: string = 'finish',
-  ): Promise<Leaderboard[]> {
-    this.logger.debug(`Handling /getLeaderboard`);
-
-    const params: Record<string, string | number> = { days, type, category };
-
-    const { data } = await this.api.get<Leaderboard[]>('/getLeaderboard', {
-      params,
-    });
-
-    return data;
-  }
-
-  async getAllUsers(): Promise<User[]> {
-    this.logger.debug(`Handling /getAllUsers`);
-
-    const { data } = await this.api.get<User[]>('/getAllUsers');
-
-    return data;
   }
 }

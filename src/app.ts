@@ -2,15 +2,16 @@
 
 // Load environment variables
 import dotenv from 'dotenv';
-import { PacemanClient } from './clients/paceman.api';
-import { RankedClient } from './clients/ranked.api';
+import fs from 'fs';
+import path from 'path';
+
+import { AppClient } from './clients/app.client';
 import { pinoLogger } from './clients/logger.client';
 import { MobibotClient } from './clients/mobibot.client';
-import { TwitchClient } from './clients/twitch.client';
-import { AppClient } from './clients/app.client';
+import { PacemanClient } from './clients/paceman.api';
 import { PostgresClient } from './clients/postgres.client';
-import path from 'path';
-import fs from 'fs';
+import { RankedClient } from './clients/ranked.api';
+import { TwitchClient } from './clients/twitch.client';
 dotenv.config();
 
 // Create clients

@@ -1,15 +1,15 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import pino from 'pino';
 import dotenv from 'dotenv';
-import path from 'path';
 import fs from 'fs';
+import path from 'path';
+import pino from 'pino';
 dotenv.config();
 
 export enum LOGGER_LEVEL {
-  SILENT = 'silent',
   DEBUG = 'debug',
-  INFO = 'info',
   ERROR = 'error',
+  INFO = 'info',
+  SILENT = 'silent',
   TRACE = 'trace',
 }
 
@@ -26,25 +26,25 @@ if (!fs.existsSync(logDir)) {
 }
 
 const prettyStream = pino.transport({
-  target: 'pino-pretty',
   options: {
-    sync: true,
     colorize: true,
+    sync: true,
     translateTime: 'SYS:standard',
   },
+  target: 'pino-pretty',
 });
 
 export const pinoLogger = pino(
   {
-    timestamp: pino.stdTimeFunctions.isoTime,
-    serializers: pino.stdSerializers,
     enabled: true,
     level: process.env.LOGGER_LEVEL || LOGGER_LEVEL.SILENT,
+    serializers: pino.stdSerializers,
+    timestamp: pino.stdTimeFunctions.isoTime,
   },
   pino.multistream([
     {
-      stream: prettyStream,
       level: process.env.LOGGER_LEVEL || LOGGER_LEVEL.SILENT,
+      stream: prettyStream,
     },
     {
       level: 'warn',

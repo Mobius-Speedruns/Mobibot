@@ -8,7 +8,7 @@
     "start": "node dist/app.js",
     "dev": "nodemon --watch src --ext ts --exec npx ts-node src/app.ts",
     "express": "nodemon --watch src --ext ts --exec npx ts-node src/express.ts",
-    "lint": "eslint \"src/**/*.ts\""
+    "lint": "eslint \"src/**/*.ts\" --fix"
   },
   "author": "Mobius Speedruns",
   "license": "ISC",
@@ -21,8 +21,6 @@
     "zod": "^4.0.17"
   },
   "devDependencies": {
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.4",
     "@eslint/js": "^9.33.0",
     "@types/dotenv": "^6.1.1",
     "@types/express": "^5.0.3",
@@ -31,6 +29,9 @@
     "@types/ws": "^8.18.1",
     "dotenv": "^17.2.1",
     "eslint": "^9.33.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-perfectionist": "^4.15.0",
+    "eslint-plugin-prettier": "^5.5.4",
     "express": "^5.1.0",
     "globals": "^16.3.0",
     "install": "^0.13.0",

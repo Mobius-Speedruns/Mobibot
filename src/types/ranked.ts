@@ -1,4 +1,5 @@
 import z from 'zod';
+
 import { TwitchColor } from './twitch';
 
 export const BOUNDS = [
@@ -39,35 +40,35 @@ export const LABELS = [
   'Netherite',
 ] as const;
 
-export enum RANK_COLOR {
-  Coal = TwitchColor.Chocolate,
-  Iron = TwitchColor.CadetBlue,
-  Gold = TwitchColor.GoldenRod,
-  Emerald = TwitchColor.Green,
-  Diamond = TwitchColor.DodgerBlue,
-  Netherite = TwitchColor.BlueViolet,
-}
-
 export enum MatchType {
   'Casual Match' = 1,
-  'Ranked Match' = 2,
-  'Private Room Match' = 3,
   'Event Mode Match' = 4,
-}
-
-export enum OVERWORLD_TYPE {
-  VILLAGE = 'VILLAGE',
-  RUINED_PORTAL = 'RUINED_PORTAL',
-  SHIPWRECK = 'SHIPWRECK',
-  DESERT_TEMPLE = 'DESERT_TEMPLE',
-  BURIED_TREASURE = 'BURIED_TREASURE',
+  'Private Room Match' = 3,
+  'Ranked Match' = 2,
 }
 
 export enum NETHER_TYPE {
-  HOUSING = 'HOUSING',
   BRIDGE = 'BRIDGE',
-  TREASURE = 'TREASURE',
+  HOUSING = 'HOUSING',
   STABLES = 'STABLES',
+  TREASURE = 'TREASURE',
+}
+
+export enum OVERWORLD_TYPE {
+  BURIED_TREASURE = 'BURIED_TREASURE',
+  DESERT_TEMPLE = 'DESERT_TEMPLE',
+  RUINED_PORTAL = 'RUINED_PORTAL',
+  SHIPWRECK = 'SHIPWRECK',
+  VILLAGE = 'VILLAGE',
+}
+
+export enum RANK_COLOR {
+  Coal = TwitchColor.Chocolate,
+  Diamond = TwitchColor.DodgerBlue,
+  Emerald = TwitchColor.Green,
+  Gold = TwitchColor.GoldenRod,
+  Iron = TwitchColor.CadetBlue,
+  Netherite = TwitchColor.BlueViolet,
 }
 
 export const PLAYER_NOT_FOUND_MESSAGES = [
@@ -76,92 +77,92 @@ export const PLAYER_NOT_FOUND_MESSAGES = [
 ];
 
 export const ErrorResponseSchema = z.object({
-  status: z.string(),
   data: z.string(),
+  status: z.string(),
 });
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
 
 export const UserProfileSchema = z.object({
-  uuid: z.string(),
-  nickname: z.string(),
-  eloRate: z.number().nullable().optional(),
-  eloRank: z.number().nullable().optional(),
   country: z.string().nullable().optional(),
+  eloRank: z.number().nullable().optional(),
+  eloRate: z.number().nullable().optional(),
+  nickname: z.string(),
+  uuid: z.string(),
 });
 export const MatchSeedSchema = z.object({
   id: z.string().nullable(),
-  overworld: z.enum(OVERWORLD_TYPE).optional().nullable(),
   nether: z.enum(NETHER_TYPE).optional().nullable(),
+  overworld: z.enum(OVERWORLD_TYPE).optional().nullable(),
 });
 export const MatchSchema = z.object({
-  id: z.number(),
-  type: z.enum(MatchType),
-  season: z.number(),
-  date: z.number(), // in seconds
-  players: z.array(UserProfileSchema),
-  seed: MatchSeedSchema.optional().nullable(),
-  forfeited: z.boolean(),
-  result: z.object({
-    uuid: z.string().optional().nullable(),
-    time: z.number(),
-  }),
   changes: z.array(
     z.object({
-      uuid: z.string(),
       change: z.number().nullable(),
       eloRate: z.number().nullable(),
+      uuid: z.string(),
     }),
   ),
+  date: z.number(), // in seconds
+  forfeited: z.boolean(),
+  id: z.number(),
+  players: z.array(UserProfileSchema),
+  result: z.object({
+    time: z.number(),
+    uuid: z.string().optional().nullable(),
+  }),
+  season: z.number(),
+  seed: MatchSeedSchema.optional().nullable(),
+  type: z.enum(MatchType),
 });
 export const SeasonResultSchema = z.object({
+  highest: z.number().nullable(),
   last: z.object({
-    eloRate: z.number().nullable().optional(),
     eloRank: z.number().nullable().optional(),
+    eloRate: z.number().nullable().optional(),
     phasePoint: z.number(),
   }),
-  highest: z.number().nullable(),
   lowest: z.number().nullable(),
 });
 export const StatisticsItemSchema = z.object({
   bestTime: z.object({
-    ranked: z.number().nullable(),
     casual: z.number().nullable(),
-  }),
-  highestWinStreak: z.object({
-    ranked: z.number(),
-    casual: z.number(),
-  }),
-  currentWinStreak: z.object({
-    ranked: z.number(),
-    casual: z.number(),
-  }),
-  playedMatches: z.object({
-    ranked: z.number(),
-    casual: z.number(),
-  }),
-  playtime: z.object({
-    ranked: z.number(),
-    casual: z.number(),
-  }),
-  completionTime: z.object({
-    ranked: z.number(),
-    casual: z.number(),
-  }),
-  forfeits: z.object({
-    ranked: z.number(),
-    casual: z.number(),
+    ranked: z.number().nullable(),
   }),
   completions: z.object({
-    ranked: z.number(),
     casual: z.number(),
+    ranked: z.number(),
   }),
-  wins: z.object({
-    ranked: z.number(),
+  completionTime: z.object({
     casual: z.number(),
+    ranked: z.number(),
+  }),
+  currentWinStreak: z.object({
+    casual: z.number(),
+    ranked: z.number(),
+  }),
+  forfeits: z.object({
+    casual: z.number(),
+    ranked: z.number(),
+  }),
+  highestWinStreak: z.object({
+    casual: z.number(),
+    ranked: z.number(),
   }),
   loses: z.object({
-    ranked: z.number(),
     casual: z.number(),
+    ranked: z.number(),
+  }),
+  playedMatches: z.object({
+    casual: z.number(),
+    ranked: z.number(),
+  }),
+  playtime: z.object({
+    casual: z.number(),
+    ranked: z.number(),
+  }),
+  wins: z.object({
+    casual: z.number(),
+    ranked: z.number(),
   }),
 });
 export const StatisticsSchema = z.object({
@@ -169,18 +170,17 @@ export const StatisticsSchema = z.object({
   total: StatisticsItemSchema,
 });
 export const GetUserDataResponseSchema = z.object({
-  status: z.string(),
   data: UserProfileSchema.extend({
     seasonResult: SeasonResultSchema,
     statistics: StatisticsSchema,
   }),
+  status: z.string(),
 });
 export const MatchesResponseSchema = z.object({
-  status: z.string(),
   data: z.array(MatchSchema),
+  status: z.string(),
 });
 export const VSResponseSchema = z.object({
-  status: z.string(),
   data: z.object({
     players: z.array(UserProfileSchema),
     results: z.object({
@@ -191,30 +191,31 @@ export const VSResponseSchema = z.object({
         .and(z.record(z.string(), z.number())),
     }),
   }),
+  status: z.string(),
 });
 export const LeaderboardResponseSchema = z.object({
-  status: z.string(),
   data: z.object({
     season: z.object({
-      startsAt: z.number(),
       endsAt: z.number(),
       number: z.number(),
+      startsAt: z.number(),
     }),
     users: z.array(
       UserProfileSchema.extend({
         seasonResult: z.object({
-          eloRate: z.number(),
           eloRank: z.number(),
+          eloRate: z.number(),
           phasePoint: z.number(),
         }),
       }),
     ),
   }),
+  status: z.string(),
 });
 
-export type UserProfile = z.infer<typeof UserProfileSchema>;
-export type Match = z.infer<typeof MatchSchema>;
 export type GetUserDataResponse = z.infer<typeof GetUserDataResponseSchema>;
-export type MatchesResponse = z.infer<typeof MatchesResponseSchema>;
-export type VSResponse = z.infer<typeof VSResponseSchema>;
 export type LeaderboardResponse = z.infer<typeof LeaderboardResponseSchema>;
+export type Match = z.infer<typeof MatchSchema>;
+export type MatchesResponse = z.infer<typeof MatchesResponseSchema>;
+export type UserProfile = z.infer<typeof UserProfileSchema>;
+export type VSResponse = z.infer<typeof VSResponseSchema>;

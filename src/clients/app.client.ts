@@ -1,25 +1,25 @@
-// src/bot/TwitchBotClient.ts
-import { MobibotClient } from './mobibot.client';
 import { Logger as PinoLogger } from 'pino';
+
 import {
-  Service,
   BotCommand,
-  HOURS_BETWEEN,
   HOURS,
+  HOURS_BETWEEN,
   INTEGER_REGEX,
   NO_ARGUMENT,
+  Service,
 } from '../types/app';
 import { Day, SplitName } from '../types/paceman';
-import { TwitchClient } from './twitch.client';
-import { PostgresClient } from './postgres.client';
 import { ChatTags } from '../types/twitch';
 import { parseError } from '../util/parseError';
+import { MobibotClient } from './mobibot.client';
+import { PostgresClient } from './postgres.client';
+import { TwitchClient } from './twitch.client';
 
 export class AppClient {
-  private db: PostgresClient;
   private client: TwitchClient;
-  private mobibotClient: MobibotClient;
+  private db: PostgresClient;
   private logger: PinoLogger;
+  private mobibotClient: MobibotClient;
 
   constructor(
     mobibotClient: MobibotClient,
@@ -50,6 +50,25 @@ export class AppClient {
     } else {
       this.logger.info('Skipping user refresh job (not in production)');
     }
+  }
+
+  public async shutdown() {
+    this.logger.info('Shutting down bot, unsubscribing from all channels...');
+
+    const channels = await this.db.listSubscribedChannels();
+
+    // unsubscribe from each channel
+    for (const channel of channels) {
+      try {
+        await this.client.unsubscribe(channel);
+        this.logger.info(`Unsubscribed from channel ${channel}`);
+      } catch (err: unknown) {
+        this.logger.error(err, `Failed to unsubscribe from channel ${channel}`);
+      }
+    }
+
+    await this.db.close();
+    this.logger.info('Database connection closed');
   }
 
   public async start() {
@@ -85,25 +104,6 @@ export class AppClient {
     });
   }
 
-  public async shutdown() {
-    this.logger.info('Shutting down bot, unsubscribing from all channels...');
-
-    const channels = await this.db.listSubscribedChannels();
-
-    // unsubscribe from each channel
-    for (const channel of channels) {
-      try {
-        await this.client.unsubscribe(channel);
-        this.logger.info(`Unsubscribed from channel ${channel}`);
-      } catch (err: unknown) {
-        this.logger.error(err, `Failed to unsubscribe from channel ${channel}`);
-      }
-    }
-
-    await this.db.close();
-    this.logger.info('Database connection closed');
-  }
-
   private async connectToChannels(channels: string[]): Promise<void> {
     // Subscribe to each channel
     for (const channel of channels) {
@@ -116,24 +116,284 @@ export class AppClient {
     }
   }
 
-  private async refreshUsers(): Promise<void> {
-    // TODO: add a getAll for ranked - use connections to make links between user and twitch
-    this.logger.info('Refreshing users from Paceman...');
+  // -----------------------------
+  // Command Routing
+  // -----------------------------
+  private async handleCommand(
+    channel: string,
+    cmd: string,
+    mcName: string,
+    args: string[],
+  ): Promise<void> {
+    let response: string | void;
+    let color: string | undefined = undefined;
 
-    const users = await this.mobibotClient.getAllUsers();
-
-    for (const user of users) {
-      this.logger.debug(`Upserting user ${user.nick}`);
-      // Upsert user
-      await this.db.upsertUser(user.nick);
-
-      // Upsert twitch handles for this user
-      for (const channel of user.twitches) {
-        await this.db.upsertTwitch(user.nick, channel);
+    if (!NO_ARGUMENT.includes(cmd as BotCommand)) {
+      if (!mcName) {
+        await this.client.send(channel, 'Player not found.');
+        return;
       }
     }
 
-    this.logger.info(`Refreshed ${users.length} users.`);
+    switch (cmd.toLowerCase() as BotCommand) {
+      case BotCommand.ALLTIME:
+        response = await this.mobibotClient.rsgLeaderboard(Day.ALLTIME);
+        break;
+      case BotCommand.AVERAGE: {
+        const season = this.parseIntArg(args[0]) || undefined;
+        response = await this.mobibotClient.average(mcName, season);
+        break;
+      }
+      case BotCommand.COMMANDS:
+      case BotCommand.DOCS:
+      case BotCommand.DOCUMENTATION:
+      case BotCommand.HELP:
+        response =
+          'Documentation is available at https://github.com/Mobius-Speedruns/Mobibot/wiki';
+        break;
+      case BotCommand.DAILY:
+        response = await this.mobibotClient.rsgLeaderboard(Day.DAILY);
+        break;
+      case BotCommand.ELO: {
+        const season = this.parseIntArg(args[0]) || undefined;
+        const data = await this.mobibotClient.elo(mcName, season);
+        response = data.response;
+        color = data.color;
+        break;
+      }
+      case BotCommand.LASTBASTION:
+        response = await this.mobibotClient.lastsplit(
+          mcName,
+          SplitName.BASTION,
+        );
+        break;
+      case BotCommand.LASTBLIND:
+        response = await this.mobibotClient.lastsplit(mcName, SplitName.BLIND);
+        break;
+      case BotCommand.LASTCOMPLETION:
+      case BotCommand.LASTFINISH:
+        response = await this.mobibotClient.lastsplit(mcName, SplitName.FINISH);
+        break;
+      case BotCommand.LASTEND:
+        response = await this.mobibotClient.lastsplit(mcName, SplitName.END);
+        break;
+      case BotCommand.LASTENTER:
+      case BotCommand.LASTNETHER:
+        response = await this.mobibotClient.lastsplit(mcName, SplitName.NETHER);
+        break;
+      case BotCommand.LASTFORT:
+      case BotCommand.LASTPACE:
+        response = await this.mobibotClient.lastsplit(
+          mcName,
+          SplitName.FORTRESS,
+        );
+        break;
+      case BotCommand.LASTMATCH:
+        response = await this.mobibotClient.lastmatch(mcName);
+        break;
+      case BotCommand.LASTSTRONGHOLD:
+        response = await this.mobibotClient.lastsplit(
+          mcName,
+          SplitName.STRONGHOLD,
+        );
+        break;
+      case BotCommand.LB:
+      case BotCommand.LEADERBOARD: {
+        const season = this.parseIntArg(args[0]) || undefined;
+        response = await this.mobibotClient.rankedLeaderboard(season);
+        break;
+      }
+      case BotCommand.MONTHLY:
+        response = await this.mobibotClient.rsgLeaderboard(Day.MONTHLY);
+        break;
+      case BotCommand.PB:
+        response = await this.mobibotClient.pb(mcName);
+        break;
+      case BotCommand.RECORD:
+      case BotCommand.VS: {
+        if (args.length >= 1) {
+          const season = this.parseIntArg(args[1]) || undefined;
+          const opp = await this.mobibotClient.getRealNickname(args[0]);
+          if (!opp) {
+            await this.client.send(channel, `Player ${args[0]} not found.`);
+            return;
+          }
+          response = await this.mobibotClient.record(mcName, opp, season);
+        } else {
+          await this.client.send(
+            channel,
+            `⚠️ Please provide at least two Minecraft Usernames for the record command.`,
+          );
+          return;
+        }
+        break;
+      }
+      case BotCommand.RESETS: {
+        const resetHours = this.parseIntArg(args[0]) || HOURS;
+        const resetHoursBetween = this.parseIntArg(args[1]) || HOURS_BETWEEN;
+        response = await this.mobibotClient.resets(
+          mcName,
+          resetHours,
+          resetHoursBetween,
+        );
+        break;
+      }
+      case BotCommand.SEEDWAVE:
+        response = await this.mobibotClient.seedwave();
+        break;
+      case BotCommand.SESSION: {
+        const hours = this.parseIntArg(args[0]) || HOURS;
+        const hoursBetween = this.parseIntArg(args[1]) || HOURS_BETWEEN;
+        response = await this.mobibotClient.session(
+          mcName,
+          hours,
+          hoursBetween,
+        );
+        break;
+      }
+      case BotCommand.TODAY: {
+        const data = await this.mobibotClient.today(mcName);
+        response = data.response;
+        color = data.color;
+        break;
+      }
+      case BotCommand.WASTED: {
+        const hours = this.parseIntArg(args[0]) || HOURS;
+        const hoursBetween = this.parseIntArg(args[1]) || HOURS_BETWEEN;
+        response = await this.mobibotClient.wastedTime(
+          mcName,
+          hours,
+          hoursBetween,
+        );
+        break;
+      }
+      case BotCommand.WEEKLY:
+        response = await this.mobibotClient.rsgLeaderboard(Day.WEEKLY);
+        break;
+      case BotCommand.WINRATE: {
+        const season = this.parseIntArg(args[0]) || undefined;
+        response = await this.mobibotClient.winrate(mcName, season);
+        break;
+      }
+      default:
+        return;
+    }
+
+    if (response) {
+      await this.client.send(channel, response, color);
+    }
+  }
+
+  private async handleCommandBang(
+    channel: string,
+    cmd: string,
+    username: string,
+    args: string[],
+  ) {
+    // For ! commands, use the channel's linked MC name
+    const chanName = channel.replace('#', '');
+    const channelMcName = await this.db.getMcName(chanName);
+    if (!channelMcName) {
+      await this.client.send(
+        channel,
+        `⚠️ No linked Minecraft username for this channel. Please link one using !link.`,
+      );
+      return;
+    }
+
+    await this.handleCommand(channel, cmd, channelMcName, args);
+  }
+
+  private async handleCommandPlus(
+    channel: string,
+    cmd: string,
+    username: string,
+    args: string[],
+  ) {
+    let mcName: string;
+    let remainingArgs: string[];
+
+    if (NO_ARGUMENT.includes(cmd as BotCommand)) {
+      mcName = '';
+      remainingArgs = args;
+    } else if (args.length > 0 && !INTEGER_REGEX.test(args[0])) {
+      // First arg is a username override
+      mcName = (await this.mobibotClient.getRealNickname(args[0])) || '';
+      remainingArgs = args.slice(1);
+    } else {
+      mcName = '';
+      // Use subscribed username
+      const subscribedMcName = await this.db.getMcName(username);
+
+      // If no subscribed username, attempt to find twitch relation
+      if (!subscribedMcName) {
+        this.logger.debug(`User ${username} not joined, attempting cache.`);
+        mcName =
+          (await this.mobibotClient.getRealNickname(`@${username}`)) || '';
+      }
+      // Otherwise, use available subscribed name
+      else {
+        mcName = subscribedMcName;
+      }
+
+      if (!mcName) {
+        await this.client.send(
+          channel,
+          `⚠️ You must use !link to link your Minecraft username to your twitch account before using +${cmd}.`,
+        );
+        return;
+      }
+      remainingArgs = args;
+    }
+
+    await this.handleCommand(channel, cmd, mcName, remainingArgs);
+  }
+
+  private async handleMessage(
+    channel: string,
+    tags: ChatTags,
+    message: string,
+  ) {
+    // Handle + and ! commands
+    const isPlus = message.startsWith('+');
+    const isBang = message.startsWith('!');
+
+    // Don't process message if it is not a command.
+    if (!isPlus && !isBang) return;
+
+    const username = tags.username || '';
+    const lower = message.toLowerCase().trim();
+
+    const parts = lower.slice(1).trim().split(/\s+/);
+    const cmd = parts[0];
+    const args = parts.slice(1);
+
+    // Subscription / link commands
+    switch (cmd) {
+      case 'join':
+        return this.join(username, channel, message);
+      case 'leave':
+        return this.leave(username, channel);
+      case 'link':
+        return this.link(username, channel, message);
+      case 'ping':
+        return this.client.send(channel, 'pong!');
+      case 'unlink':
+        return this.unlink(username, channel);
+    }
+
+    // Don't process if it is not a valid mobibot command.
+    if (!Object.values(BotCommand).includes(cmd as BotCommand)) return;
+
+    try {
+      if (isPlus) {
+        await this.handleCommandPlus(channel, cmd, username, args);
+      } else {
+        await this.handleCommandBang(channel, cmd, username, args);
+      }
+    } catch (err) {
+      this.logger.error(err);
+    }
   }
 
   // -----------------------------
@@ -315,6 +575,31 @@ export class AppClient {
     }
   }
 
+  private parseIntArg(arg: string): null | number {
+    if (!arg || !INTEGER_REGEX.test(arg)) return null;
+    return Number(arg);
+  }
+
+  private async refreshUsers(): Promise<void> {
+    // TODO: add a getAll for ranked - use connections to make links between user and twitch
+    this.logger.info('Refreshing users from Paceman...');
+
+    const users = await this.mobibotClient.getAllUsers();
+
+    for (const user of users) {
+      this.logger.debug(`Upserting user ${user.nick}`);
+      // Upsert user
+      await this.db.upsertUser(user.nick);
+
+      // Upsert twitch handles for this user
+      for (const channel of user.twitches) {
+        await this.db.upsertTwitch(user.nick, channel);
+      }
+    }
+
+    this.logger.info(`Refreshed ${users.length} users.`);
+  }
+
   private async unlink(requester: string, channel: string) {
     const chanName = requester.toLowerCase();
 
@@ -356,292 +641,5 @@ export class AppClient {
         `⚠️ Could not unlink Minecraft username due to a database error.`,
       );
     }
-  }
-
-  // -----------------------------
-  // Command Routing
-  // -----------------------------
-  private async handleCommand(
-    channel: string,
-    cmd: string,
-    mcName: string,
-    args: string[],
-  ): Promise<void> {
-    let response: string | void;
-    let color: string | undefined = undefined;
-
-    if (!NO_ARGUMENT.includes(cmd as BotCommand)) {
-      if (!mcName) {
-        await this.client.send(channel, 'Player not found.');
-        return;
-      }
-    }
-
-    switch (cmd.toLowerCase() as BotCommand) {
-      case BotCommand.COMMANDS:
-      case BotCommand.DOCS:
-      case BotCommand.DOCUMENTATION:
-      case BotCommand.HELP:
-        response =
-          'Documentation is available at https://github.com/Mobius-Speedruns/Mobibot/wiki';
-        break;
-      case BotCommand.SESSION: {
-        const hours = this.parseIntArg(args[0]) || HOURS;
-        const hoursBetween = this.parseIntArg(args[1]) || HOURS_BETWEEN;
-        response = await this.mobibotClient.session(
-          mcName,
-          hours,
-          hoursBetween,
-        );
-        break;
-      }
-      case BotCommand.RESETS: {
-        const resetHours = this.parseIntArg(args[0]) || HOURS;
-        const resetHoursBetween = this.parseIntArg(args[1]) || HOURS_BETWEEN;
-        response = await this.mobibotClient.resets(
-          mcName,
-          resetHours,
-          resetHoursBetween,
-        );
-        break;
-      }
-      case BotCommand.LASTENTER:
-      case BotCommand.LASTNETHER:
-        response = await this.mobibotClient.lastsplit(mcName, SplitName.NETHER);
-        break;
-      case BotCommand.LASTBASTION:
-        response = await this.mobibotClient.lastsplit(
-          mcName,
-          SplitName.BASTION,
-        );
-        break;
-      case BotCommand.LASTPACE:
-      case BotCommand.LASTFORT:
-        response = await this.mobibotClient.lastsplit(
-          mcName,
-          SplitName.FORTRESS,
-        );
-        break;
-      case BotCommand.LASTBLIND:
-        response = await this.mobibotClient.lastsplit(mcName, SplitName.BLIND);
-        break;
-      case BotCommand.LASTSTRONGHOLD:
-        response = await this.mobibotClient.lastsplit(
-          mcName,
-          SplitName.STRONGHOLD,
-        );
-        break;
-      case BotCommand.LASTEND:
-        response = await this.mobibotClient.lastsplit(mcName, SplitName.END);
-        break;
-      case BotCommand.LASTFINISH:
-      case BotCommand.LASTCOMPLETION:
-        response = await this.mobibotClient.lastsplit(mcName, SplitName.FINISH);
-        break;
-      case BotCommand.PB:
-        response = await this.mobibotClient.pb(mcName);
-        break;
-      case BotCommand.DAILY:
-        response = await this.mobibotClient.rsgLeaderboard(Day.DAILY);
-        break;
-      case BotCommand.WEEKLY:
-        response = await this.mobibotClient.rsgLeaderboard(Day.WEEKLY);
-        break;
-      case BotCommand.MONTHLY:
-        response = await this.mobibotClient.rsgLeaderboard(Day.MONTHLY);
-        break;
-      case BotCommand.ALLTIME:
-        response = await this.mobibotClient.rsgLeaderboard(Day.ALLTIME);
-        break;
-      case BotCommand.ELO: {
-        const season = this.parseIntArg(args[0]) || undefined;
-        const data = await this.mobibotClient.elo(mcName, season);
-        response = data.response;
-        color = data.color;
-        break;
-      }
-      case BotCommand.LASTMATCH:
-        response = await this.mobibotClient.lastmatch(mcName);
-        break;
-      case BotCommand.TODAY:
-        const data = await this.mobibotClient.today(mcName);
-        response = data.response;
-        color = data.color;
-        break;
-      case BotCommand.SEEDWAVE:
-        response = await this.mobibotClient.seedwave();
-        break;
-      case BotCommand.VS:
-      case BotCommand.RECORD: {
-        if (args.length >= 1) {
-          const season = this.parseIntArg(args[1]) || undefined;
-          const opp = await this.mobibotClient.getRealNickname(args[0]);
-          if (!opp) {
-            await this.client.send(channel, `Player ${args[0]} not found.`);
-            return;
-          }
-          response = await this.mobibotClient.record(mcName, opp, season);
-        } else {
-          await this.client.send(
-            channel,
-            `⚠️ Please provide at least two Minecraft Usernames for the record command.`,
-          );
-          return;
-        }
-        break;
-      }
-      case BotCommand.WINRATE: {
-        const season = this.parseIntArg(args[0]) || undefined;
-        response = await this.mobibotClient.winrate(mcName, season);
-        break;
-      }
-      case BotCommand.AVERAGE: {
-        const season = this.parseIntArg(args[0]) || undefined;
-        response = await this.mobibotClient.average(mcName, season);
-        break;
-      }
-      case BotCommand.LEADERBOARD:
-      case BotCommand.LB: {
-        const season = this.parseIntArg(args[0]) || undefined;
-        response = await this.mobibotClient.rankedLeaderboard(season);
-        break;
-      }
-      case BotCommand.WASTED: {
-        const hours = this.parseIntArg(args[0]) || HOURS;
-        const hoursBetween = this.parseIntArg(args[1]) || HOURS_BETWEEN;
-        response = await this.mobibotClient.wastedTime(
-          mcName,
-          hours,
-          hoursBetween,
-        );
-        break;
-      }
-      default:
-        return;
-    }
-
-    if (response) {
-      await this.client.send(channel, response, color);
-    }
-  }
-
-  // -----------------------------
-  // Message Handler
-  // -----------------------------
-  private async handlePlusCommand(
-    channel: string,
-    cmd: string,
-    username: string,
-    args: string[],
-  ) {
-    let mcName: string;
-    let remainingArgs: string[];
-
-    if (NO_ARGUMENT.includes(cmd as BotCommand)) {
-      mcName = '';
-      remainingArgs = args;
-    } else if (args.length > 0 && !INTEGER_REGEX.test(args[0])) {
-      // First arg is a username override
-      mcName = (await this.mobibotClient.getRealNickname(args[0])) || '';
-      remainingArgs = args.slice(1);
-    } else {
-      mcName = '';
-      // Use subscribed username
-      const subscribedMcName = await this.db.getMcName(username);
-
-      // If no subscribed username, attempt to find twitch relation
-      if (!subscribedMcName) {
-        this.logger.debug(`User ${username} not joined, attempting cache.`);
-        mcName =
-          (await this.mobibotClient.getRealNickname(`@${username}`)) || '';
-      }
-      // Otherwise, use available subscribed name
-      else {
-        mcName = subscribedMcName;
-      }
-
-      if (!mcName) {
-        await this.client.send(
-          channel,
-          `⚠️ You must use !link to link your Minecraft username to your twitch account before using +${cmd}.`,
-        );
-        return;
-      }
-      remainingArgs = args;
-    }
-
-    await this.handleCommand(channel, cmd, mcName, remainingArgs);
-  }
-
-  private async handleBangCommand(
-    channel: string,
-    cmd: string,
-    username: string,
-    args: string[],
-  ) {
-    // For ! commands, use the channel's linked MC name
-    const chanName = channel.replace('#', '');
-    const channelMcName = await this.db.getMcName(chanName);
-    if (!channelMcName) {
-      await this.client.send(
-        channel,
-        `⚠️ No linked Minecraft username for this channel. Please link one using !link.`,
-      );
-      return;
-    }
-
-    await this.handleCommand(channel, cmd, channelMcName, args);
-  }
-
-  private async handleMessage(
-    channel: string,
-    tags: ChatTags,
-    message: string,
-  ) {
-    // Handle + and ! commands
-    const isPlus = message.startsWith('+');
-    const isBang = message.startsWith('!');
-
-    // Don't process message if it is not a command.
-    if (!isPlus && !isBang) return;
-
-    const username = tags.username || '';
-    const lower = message.toLowerCase().trim();
-
-    const parts = lower.slice(1).trim().split(/\s+/);
-    const cmd = parts[0];
-    const args = parts.slice(1);
-
-    // Subscription / link commands
-    switch (cmd) {
-      case 'join':
-        return this.join(username, channel, message);
-      case 'leave':
-        return this.leave(username, channel);
-      case 'link':
-        return this.link(username, channel, message);
-      case 'unlink':
-        return this.unlink(username, channel);
-      case 'ping':
-        return this.client.send(channel, 'pong!');
-    }
-
-    // Don't process if it is not a valid mobibot command.
-    if (!Object.values(BotCommand).includes(cmd as BotCommand)) return;
-
-    try {
-      if (isPlus) {
-        await this.handlePlusCommand(channel, cmd, username, args);
-      } else {
-        await this.handleBangCommand(channel, cmd, username, args);
-      }
-    } catch (err) {
-      this.logger.error(err);
-    }
-  }
-
-  private parseIntArg(arg: string): number | null {
-    if (!arg || !INTEGER_REGEX.test(arg)) return null;
-    return Number(arg);
   }
 }

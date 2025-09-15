@@ -1,7 +1,8 @@
-import { Pool } from 'pg';
 import fs from 'fs';
 import path from 'path';
+import { Pool } from 'pg';
 import { Logger as PinoLogger } from 'pino';
+
 import { Service } from '../types/app';
 import {
   ChannelRow,
@@ -14,9 +15,9 @@ import {
 import { parseError } from '../util/parseError';
 
 export class PostgresClient {
-  private pool: Pool;
-  private minSimilarityScore: number = 0.3;
   private logger: PinoLogger;
+  private minSimilarityScore: number = 0.3;
+  private pool: Pool;
 
   constructor(connectionString: string, logger: PinoLogger) {
     this.logger = logger.child({ Service: Service.DB });
@@ -25,28 +26,99 @@ export class PostgresClient {
     });
   }
 
-  private async createMigrationsTable() {
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS migrations (
-        id SERIAL PRIMARY KEY,
-        filename VARCHAR(255) UNIQUE NOT NULL,
-        executed_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
+  async close() {
+    await this.pool.end();
   }
 
-  private async getMigrationStatus(filename: string): Promise<boolean> {
-    const result = await this.pool.query(
-      'SELECT 1 FROM migrations WHERE filename = $1',
-      [filename],
+  async createChannel(
+    name: string,
+    mcName?: string,
+    subscribed: boolean = false,
+  ): Promise<ChannelRow | null> {
+    const res = await this.pool.query<ChannelRow>(
+      `INSERT INTO channels (name, mc_name, subscribed)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (name)
+       DO UPDATE SET 
+         mc_name = EXCLUDED.mc_name,
+         subscribed = EXCLUDED.subscribed,
+         updated_at = NOW()
+       RETURNING *`,
+      [name.toLowerCase(), mcName ?? null, subscribed],
     );
-    return (result.rowCount ?? 0) > 0;
+    return res.rows[0];
   }
 
-  private async recordMigration(filename: string) {
-    await this.pool.query('INSERT INTO migrations (filename) VALUES ($1)', [
-      filename,
-    ]);
+  async getAllChannels(): Promise<
+    Pick<ChannelRow, 'mc_name' | 'name' | 'subscribed'>[]
+  > {
+    const res = await this.pool.query<
+      Pick<ChannelRow, 'mc_name' | 'name' | 'subscribed'>
+    >(
+      `SELECT name, mc_name, subscribed  FROM channels ORDER BY created_at ASC`,
+    );
+    return res.rows;
+  }
+
+  async getChannel(channelName: string): Promise<ChannelRow | null> {
+    const res = await this.pool.query<Pick<ChannelRow, 'name'>>(
+      `SELECT * FROM channels WHERE name = $1`,
+      [channelName.toLowerCase()],
+    );
+    if (res.rowCount === 0) return null;
+
+    // Validate & coerce the first row
+    return ChannelRowSchema.parse(res.rows[0]);
+  }
+
+  async getMcName(channelName: string): Promise<null | string> {
+    const res = await this.pool.query<Pick<ChannelRow, 'mc_name'>>(
+      `SELECT mc_name FROM channels WHERE name = $1`,
+      [channelName.toLowerCase()],
+    );
+    if (res.rowCount === 0) return null;
+
+    return res.rows[0].mc_name;
+  }
+
+  async getTwitchFuzzy(channel: string): Promise<null | string> {
+    /**
+     * Fuzzy search twitch cache using channel, returning name.
+     */
+    const res = await this.pool.query<TwitchRow>(
+      `
+      SELECT *, similarity(channel, $1) AS score
+      FROM twitches
+      WHERE similarity(channel, $1) >= $2
+      ORDER BY score DESC
+      LIMIT 1;
+      `,
+      [channel, this.minSimilarityScore],
+    );
+
+    if (res.rowCount === 0) return null;
+
+    return TwitchRowSchema.parse(res.rows[0]).name;
+  }
+
+  async getUserFuzzy(name: string): Promise<null | string> {
+    /**
+     * Fuzzy search user cache using name, returning name.
+     */
+    const res = await this.pool.query<UserRow>(
+      `
+      SELECT *, similarity(name, $1) AS score
+      FROM users
+      WHERE similarity(name, $1) >= $2
+      ORDER BY score DESC
+      LIMIT 1;
+      `,
+      [name, this.minSimilarityScore],
+    );
+
+    if (res.rowCount === 0) return null;
+
+    return UserRowSchema.parse(res.rows[0]).name;
   }
 
   async init() {
@@ -89,6 +161,32 @@ export class PostgresClient {
     }
   }
 
+  async listSubscribedChannels(): Promise<string[]> {
+    const res = await this.pool.query<Pick<ChannelRow, 'name'>>(
+      `SELECT name FROM channels WHERE subscribed = true ORDER BY created_at ASC`,
+    );
+    return res.rows.map((r) => r.name);
+  }
+
+  async removeChannel(name: string): Promise<boolean> {
+    const res = await this.pool.query(`DELETE FROM channels WHERE name = $1`, [
+      name.toLowerCase(),
+    ]);
+
+    return (res.rowCount ?? 0) > 0;
+  }
+
+  async updateSubscription(
+    channelName: string,
+    subscribed: boolean,
+  ): Promise<boolean> {
+    const res = await this.pool.query(
+      `UPDATE channels SET subscribed = $1 WHERE name = $2`,
+      [subscribed, channelName.toLowerCase()],
+    );
+    return (res.rowCount ?? 0) > 0;
+  }
+
   async upsertChannel(
     name: string,
     mcName?: string,
@@ -107,135 +205,6 @@ export class PostgresClient {
     return res.rows[0];
   }
 
-  async createChannel(
-    name: string,
-    mcName?: string,
-    subscribed: boolean = false,
-  ): Promise<ChannelRow | null> {
-    const res = await this.pool.query<ChannelRow>(
-      `INSERT INTO channels (name, mc_name, subscribed)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (name)
-       DO UPDATE SET 
-         mc_name = EXCLUDED.mc_name,
-         subscribed = EXCLUDED.subscribed,
-         updated_at = NOW()
-       RETURNING *`,
-      [name.toLowerCase(), mcName ?? null, subscribed],
-    );
-    return res.rows[0];
-  }
-
-  async getMcName(channelName: string): Promise<string | null> {
-    const res = await this.pool.query<Pick<ChannelRow, 'mc_name'>>(
-      `SELECT mc_name FROM channels WHERE name = $1`,
-      [channelName.toLowerCase()],
-    );
-    if (res.rowCount === 0) return null;
-
-    return res.rows[0].mc_name;
-  }
-
-  async getChannel(channelName: string): Promise<ChannelRow | null> {
-    const res = await this.pool.query<Pick<ChannelRow, 'name'>>(
-      `SELECT * FROM channels WHERE name = $1`,
-      [channelName.toLowerCase()],
-    );
-    if (res.rowCount === 0) return null;
-
-    // Validate & coerce the first row
-    return ChannelRowSchema.parse(res.rows[0]);
-  }
-
-  async getUserFuzzy(name: string): Promise<string | null> {
-    /**
-     * Fuzzy search user cache using name, returning name.
-     */
-    const res = await this.pool.query<UserRow>(
-      `
-      SELECT *, similarity(name, $1) AS score
-      FROM users
-      WHERE similarity(name, $1) >= $2
-      ORDER BY score DESC
-      LIMIT 1;
-      `,
-      [name, this.minSimilarityScore],
-    );
-
-    if (res.rowCount === 0) return null;
-
-    return UserRowSchema.parse(res.rows[0]).name;
-  }
-
-  async getTwitchFuzzy(channel: string): Promise<string | null> {
-    /**
-     * Fuzzy search twitch cache using channel, returning name.
-     */
-    const res = await this.pool.query<TwitchRow>(
-      `
-      SELECT *, similarity(channel, $1) AS score
-      FROM twitches
-      WHERE similarity(channel, $1) >= $2
-      ORDER BY score DESC
-      LIMIT 1;
-      `,
-      [channel, this.minSimilarityScore],
-    );
-
-    if (res.rowCount === 0) return null;
-
-    return TwitchRowSchema.parse(res.rows[0]).name;
-  }
-
-  async getAllChannels(): Promise<
-    Pick<ChannelRow, 'name' | 'mc_name' | 'subscribed'>[]
-  > {
-    const res = await this.pool.query<
-      Pick<ChannelRow, 'name' | 'mc_name' | 'subscribed'>
-    >(
-      `SELECT name, mc_name, subscribed  FROM channels ORDER BY created_at ASC`,
-    );
-    return res.rows;
-  }
-
-  async listSubscribedChannels(): Promise<string[]> {
-    const res = await this.pool.query<Pick<ChannelRow, 'name'>>(
-      `SELECT name FROM channels WHERE subscribed = true ORDER BY created_at ASC`,
-    );
-    return res.rows.map((r) => r.name);
-  }
-
-  async updateSubscription(
-    channelName: string,
-    subscribed: boolean,
-  ): Promise<boolean> {
-    const res = await this.pool.query(
-      `UPDATE channels SET subscribed = $1 WHERE name = $2`,
-      [subscribed, channelName.toLowerCase()],
-    );
-    return (res.rowCount ?? 0) > 0;
-  }
-
-  async removeChannel(name: string): Promise<boolean> {
-    const res = await this.pool.query(`DELETE FROM channels WHERE name = $1`, [
-      name.toLowerCase(),
-    ]);
-
-    return (res.rowCount ?? 0) > 0;
-  }
-
-  async upsertUser(user: string): Promise<string> {
-    const res = await this.pool.query<UserRow>(
-      `INSERT INTO users (name, updated_at)
-        VALUES ($1, NOW())
-        ON CONFLICT (name) DO UPDATE
-        SET updated_at = NOW()
-        RETURNING *`,
-      [user],
-    );
-    return res.rows[0].name;
-  }
-
   async upsertTwitch(user: string, twitch: string): Promise<string> {
     const res = await this.pool.query<TwitchRow>(
       `INSERT INTO twitches (name, channel, updated_at)
@@ -250,7 +219,39 @@ export class PostgresClient {
     return res.rows[0].name;
   }
 
-  async close() {
-    await this.pool.end();
+  async upsertUser(user: string): Promise<string> {
+    const res = await this.pool.query<UserRow>(
+      `INSERT INTO users (name, updated_at)
+        VALUES ($1, NOW())
+        ON CONFLICT (name) DO UPDATE
+        SET updated_at = NOW()
+        RETURNING *`,
+      [user],
+    );
+    return res.rows[0].name;
+  }
+
+  private async createMigrationsTable() {
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS migrations (
+        id SERIAL PRIMARY KEY,
+        filename VARCHAR(255) UNIQUE NOT NULL,
+        executed_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+  }
+
+  private async getMigrationStatus(filename: string): Promise<boolean> {
+    const result = await this.pool.query(
+      'SELECT 1 FROM migrations WHERE filename = $1',
+      [filename],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  private async recordMigration(filename: string) {
+    await this.pool.query('INSERT INTO migrations (filename) VALUES ($1)', [
+      filename,
+    ]);
   }
 }

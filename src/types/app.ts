@@ -1,12 +1,12 @@
 import z from 'zod';
 
 export enum Service {
-  PACEMAN = '[PACEMAN]',
+  APP = '[APP]',
+  DB = '[DB]',
   MOBIBOT = '[MOBIBOT]',
+  PACEMAN = '[PACEMAN]',
   RANKED = '[RANKED]',
   TWITCH = '[TWITCH]',
-  DB = '[DB]',
-  APP = '[APP]',
 }
 
 // Defaults for hours and hoursBetween
@@ -14,38 +14,38 @@ export const HOURS = 1000;
 export const HOURS_BETWEEN = 1;
 
 export enum BotCommand {
-  SESSION = 'session',
-  RESETS = 'resets',
-  PB = 'pb',
-  LASTPACE = 'lastpace',
-  LASTNETHER = 'lastnether',
-  LASTENTER = 'lastenter',
-  LASTBASTION = 'lastbastion',
-  LASTFORT = 'lastfort',
-  LASTBLIND = 'lastblind',
-  LASTSTRONGHOLD = 'laststronghold',
-  LASTEND = 'lastend',
-  LASTCOMPLETION = 'lastcompletion',
-  LASTFINISH = 'lastfinish',
-  WASTED = 'wasted',
-  DAILY = 'daily',
-  WEEKLY = 'weekly',
-  MONTHLY = 'monthly',
   ALLTIME = 'alltime',
-  ELO = 'elo',
-  LASTMATCH = 'lastmatch',
+  AVERAGE = 'average',
+  COMMANDS = 'commands',
+  DAILY = 'daily',
   DOCS = 'docs',
   DOCUMENTATION = 'documentation',
+  ELO = 'elo',
   HELP = 'help',
-  COMMANDS = 'commands',
-  TODAY = 'today',
-  RECORD = 'record',
-  VS = 'vs',
-  SEEDWAVE = 'seedwave',
-  WINRATE = 'winrate',
-  AVERAGE = 'average',
-  LEADERBOARD = 'leaderboard',
+  LASTBASTION = 'lastbastion',
+  LASTBLIND = 'lastblind',
+  LASTCOMPLETION = 'lastcompletion',
+  LASTEND = 'lastend',
+  LASTENTER = 'lastenter',
+  LASTFINISH = 'lastfinish',
+  LASTFORT = 'lastfort',
+  LASTMATCH = 'lastmatch',
+  LASTNETHER = 'lastnether',
+  LASTPACE = 'lastpace',
+  LASTSTRONGHOLD = 'laststronghold',
   LB = 'lb',
+  LEADERBOARD = 'leaderboard',
+  MONTHLY = 'monthly',
+  PB = 'pb',
+  RECORD = 'record',
+  RESETS = 'resets',
+  SEEDWAVE = 'seedwave',
+  SESSION = 'session',
+  TODAY = 'today',
+  VS = 'vs',
+  WASTED = 'wasted',
+  WEEKLY = 'weekly',
+  WINRATE = 'winrate',
 }
 
 export const NO_ARGUMENT = [
@@ -64,8 +64,8 @@ export const NO_ARGUMENT = [
 export const INTEGER_REGEX = /^-?\d+$/;
 
 export const seedwaveSchema = z.object({
-  seedwave: z.number(),
   isBloodseed: z.boolean(),
+  seedwave: z.number(),
 });
 
 export type Seedwave = z.infer<typeof seedwaveSchema>;
