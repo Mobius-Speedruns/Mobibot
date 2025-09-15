@@ -55,6 +55,12 @@ export class TwitchClient extends EventEmitter {
   // For handling Twitch-initiated reconnects
   private reconnectWebSocket?: WebSocket;
 
+  // Heartbeat tracking
+  private lastKeepaliveTime: number = 0;
+  private heartbeatInterval?: NodeJS.Timeout;
+  private readonly KEEPALIVE_TIMEOUT_MS = 60 * 5 * 1000; // 5 minutes
+  private readonly HEARTBEAT_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
+
   constructor(logger: PinoLogger) {
     super();
     this.botId = process.env.BOT_ID || '';
@@ -227,6 +233,39 @@ export class TwitchClient extends EventEmitter {
     this.logger.debug(`Sent message in ${channelName}, ${finalMessage}`);
   }
 
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+
+    this.lastKeepaliveTime = Date.now();
+
+    this.logger.debug('Starting heartbeat monitoring');
+
+    this.heartbeatInterval = setInterval(() => {
+      const now = Date.now();
+      const timeSinceLastKeepalive = now - this.lastKeepaliveTime;
+
+      if (timeSinceLastKeepalive > this.KEEPALIVE_TIMEOUT_MS) {
+        this.logger.warn(
+          `No keepalive received for ${timeSinceLastKeepalive}ms, reconnecting`,
+        );
+        this.stopHeartbeat();
+        this.handleReconnect(this.websocketURL);
+      }
+    }, this.HEARTBEAT_CHECK_INTERVAL_MS);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = undefined;
+      this.logger.debug('Stopped heartbeat monitoring');
+    }
+  }
+
+  private updateKeepaliveTime(): void {
+    this.lastKeepaliveTime = Date.now();
+  }
+
   private async changeColor(color: TwitchColor): Promise<void> {
     this.logger.debug(`Changing colour ${color}`);
     await this.userApi.put('helix/chat/color', {
@@ -394,6 +433,8 @@ export class TwitchClient extends EventEmitter {
       this.sessionId = newSessionId;
       this.logger.info(`WebSocket session initialized: ${this.sessionId}`);
 
+      this.startHeartbeat();
+
       // Re-establish subscriptions for all active channels
       await this.reestablishSubscriptions();
 
@@ -421,13 +462,22 @@ export class TwitchClient extends EventEmitter {
       return;
     }
 
-    if (message.metadata.message_type === 'session_keepalive') return;
+    // Handle keepalive messages to reset heartbeat timer
+    if (message.metadata.message_type === 'session_keepalive') {
+      this.updateKeepaliveTime();
+      return;
+    }
+
     // Log this entire message - don't know how to handle it
     this.logger.debug(message, 'Unhandled Message');
   }
 
   private handleReconnect(reconnectUrl: string): void {
     this.logger.info('Starting Twitch-initiated reconnect process');
+
+    // Stop heartbeat for current connection
+    this.stopHeartbeat();
+
     try {
       this.reconnectWebSocket = this.startWebSocket(reconnectUrl);
     } catch (error) {
@@ -486,6 +536,7 @@ export class TwitchClient extends EventEmitter {
     // Handle WebSocket close/disconnect
     ws.on('close', (code, reason) => {
       this.logger.debug(`Handling close ${code}`);
+      this.stopHeartbeat();
       if (code === 1000) {
         // Do nothing, connection closed intentionally.
         return;
