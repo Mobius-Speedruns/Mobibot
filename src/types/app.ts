@@ -37,6 +37,7 @@ export enum BotCommand {
   LEADERBOARD = 'leaderboard',
   MONTHLY = 'monthly',
   PB = 'pb',
+  PLAYTIME = 'playtime',
   RECORD = 'record',
   RESETS = 'resets',
   SEEDWAVE = 'seedwave',

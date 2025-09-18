@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export const MAX_HOUR = 9999999;
+
 export enum Day {
   ALLTIME = 9999,
   DAILY = 1,

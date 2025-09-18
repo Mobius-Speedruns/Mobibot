@@ -209,6 +209,11 @@ export class AppClient {
       case BotCommand.PB:
         response = await this.mobibotClient.pb(mcName);
         break;
+      case BotCommand.PLAYTIME: {
+        const season = this.parseIntArg(args[0]) || undefined;
+        response = await this.mobibotClient.playtime(mcName, season);
+        break;
+      }
       case BotCommand.RECORD:
       case BotCommand.VS: {
         if (args.length >= 1) {
