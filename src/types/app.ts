@@ -16,12 +16,11 @@ export const HOURS_BETWEEN = 1;
 export enum BotCommand {
   ALLTIME = 'alltime',
   AVERAGE = 'average',
-  COMMANDS = 'commands',
+  COMMANDS = 'mobibot',
+  COMMANDSALT = 'mobiusbot',
   DAILY = 'daily',
-  DOCS = 'docs',
-  DOCUMENTATION = 'documentation',
   ELO = 'elo',
-  HELP = 'help',
+  HELP = 'mobibothelp',
   LASTBASTION = 'lastbastion',
   LASTBLIND = 'lastblind',
   LASTCOMPLETION = 'lastcompletion',
@@ -50,9 +49,9 @@ export enum BotCommand {
 }
 
 export const NO_ARGUMENT = [
-  BotCommand.DOCUMENTATION,
   BotCommand.HELP,
   BotCommand.COMMANDS,
+  BotCommand.COMMANDSALT,
   BotCommand.LEADERBOARD,
   BotCommand.LB,
   BotCommand.SEEDWAVE,

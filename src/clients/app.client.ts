@@ -145,8 +145,7 @@ export class AppClient {
         break;
       }
       case BotCommand.COMMANDS:
-      case BotCommand.DOCS:
-      case BotCommand.DOCUMENTATION:
+      case BotCommand.COMMANDSALT:
       case BotCommand.HELP:
         response =
           'Documentation is available at https://github.com/Mobius-Speedruns/Mobibot/wiki';
