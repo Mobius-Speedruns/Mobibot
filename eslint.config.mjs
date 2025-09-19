@@ -6,7 +6,7 @@ import globals from 'globals';
 
 export default tselint.config(
   {
-    ignores: ['eslint.config.mjs'],
+    ignores: ['eslint.config.mjs', 'src/types/**'],
   },
   perfectionist.configs['recommended-alphabetical'],
   eslint.configs.recommended,
@@ -30,6 +30,7 @@ export default tselint.config(
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
+      'perfectionist/sort-enums': 'off',
     },
   },
 );

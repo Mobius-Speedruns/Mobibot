@@ -15,10 +15,10 @@ import {
 import { handleNotFound } from '../util/handleNotFound';
 import { isTodayUTC } from '../util/isTodayUTC';
 import { msToTime } from '../util/msToTime';
+import { msToYMDH } from '../util/msToYMDH';
 import { PacemanClient } from './paceman.api';
 import { PostgresClient } from './postgres.client';
 import { RankedClient } from './ranked.api';
-import { msToYMDH } from '../util/msToYMDH';
 
 export class MobibotClient {
   private db: PostgresClient;
@@ -294,6 +294,27 @@ export class MobibotClient {
     if (!response) return '⚠️ No pb found!';
     return response;
   }
+  async playtime(name: string, season?: null | number): Promise<string> {
+    let currentSeason = season;
+    if (!season) currentSeason = await this.ranked.getCurrentSeason();
+    const [rsg, ranked] = await Promise.all([
+      this.paceman.getNPH(name, MAX_HOUR, MAX_HOUR),
+      this.ranked.getUserData(name, currentSeason),
+    ]);
+
+    const rankedSeasonPlaytime = ranked.data.statistics.season.playtime.ranked;
+    const rankedTotalPlaytime = ranked.data.statistics.total.playtime.ranked;
+    const rsgPlaytime = rsg.playtime;
+    const rsgTotalResets = rsg.totalResets;
+
+    const sections = [
+      `${appendInvisibleChars(name)} playtime`,
+      `Total ranked playtime: ${msToYMDH(rankedTotalPlaytime)} total, ${msToYMDH(rankedSeasonPlaytime)} in season ${currentSeason}`,
+      `Total RSG any% playtime: ${msToYMDH(rsgPlaytime)}, with ${rsgTotalResets.toLocaleString('en-US')} resets`,
+    ].filter(Boolean);
+
+    return sections.join(' \u2756 ');
+  }
   async rankedLeaderboard(season?: number): Promise<string> {
     let currentSeason = season;
     if (!season) currentSeason = await this.ranked.getCurrentSeason();
@@ -333,6 +354,7 @@ export class MobibotClient {
     ];
     return sections.join(' \u2756 ');
   }
+
   async resets(
     name: string,
     hours?: number,
@@ -342,32 +364,10 @@ export class MobibotClient {
 
     return `${appendInvisibleChars(name)} Reset Stats \u2756 ${resetData.totalResets} total resets \u2756 ${resetData.resets} last session`;
   }
-
   async rsgLeaderboard(days: Day): Promise<string> {
     const leaderboard = await this.paceman.getLeaderboard(days);
     const first = leaderboard[0];
     return `${capitalizeWords(Day[days])} Paceman Record: ${first.name} with ${msToTime(first.value)}`;
-  }
-  async playtime(name: string, season?: null | number): Promise<string> {
-    let currentSeason = season;
-    if (!season) currentSeason = await this.ranked.getCurrentSeason();
-    const [rsg, ranked] = await Promise.all([
-      this.paceman.getNPH(name, MAX_HOUR, MAX_HOUR),
-      this.ranked.getUserData(name, currentSeason),
-    ]);
-
-    const rankedSeasonPlaytime = ranked.data.statistics.season.playtime.ranked;
-    const rankedTotalPlaytime = ranked.data.statistics.total.playtime.ranked;
-    const rsgPlaytime = rsg.playtime;
-    const rsgTotalResets = rsg.totalResets;
-
-    const sections = [
-      `${appendInvisibleChars(name)} playtime`,
-      `Total ranked playtime: ${msToYMDH(rankedTotalPlaytime)} total, ${msToYMDH(rankedSeasonPlaytime)} in season ${currentSeason}`,
-      `Total RSG any% playtime: ${msToYMDH(rsgPlaytime)}, with ${rsgTotalResets.toLocaleString('en-US')} resets`,
-    ].filter(Boolean);
-
-    return sections.join(' \u2756 ');
   }
   async seedwave(): Promise<string> {
     const { data } = await axios.get<Seedwave>(
