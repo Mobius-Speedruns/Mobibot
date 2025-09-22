@@ -69,6 +69,10 @@ export const recentRunSchema = z.array(
     realUpdated: z.number().nullable(),
   }),
 );
+export const latestRunSchema = z.object({
+  id: z.number(),
+  time: z.number(),
+});
 export const pbSchema = z.array(
   z.object({
     name: z.string(),
@@ -100,6 +104,7 @@ export const leadboardSchema = z.object({
 
 export type Run = z.infer<typeof runSchema>;
 export type RecentRuns = z.infer<typeof recentRunSchema>;
+export type LastestRun = z.infer<typeof latestRunSchema>;
 export type NPH = z.infer<typeof nphSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type PB = z.infer<typeof pbSchema>;

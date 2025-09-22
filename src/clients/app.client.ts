@@ -246,8 +246,8 @@ export class AppClient {
         response = await this.mobibotClient.seedwave();
         break;
       case BotCommand.SESSION: {
-        const hours = this.parseIntArg(args[0]) || HOURS;
-        const hoursBetween = this.parseIntArg(args[1]) || HOURS_BETWEEN;
+        const hours = this.parseIntArg(args[0]) || undefined; // let session handle default
+        const hoursBetween = this.parseIntArg(args[1]) || undefined;
         response = await this.mobibotClient.session(
           mcName,
           hours,

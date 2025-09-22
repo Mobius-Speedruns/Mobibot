@@ -19,6 +19,7 @@ import { msToYMDH } from '../util/msToYMDH';
 import { PacemanClient } from './paceman.api';
 import { PostgresClient } from './postgres.client';
 import { RankedClient } from './ranked.api';
+import { getHoursSinceTime } from '../util/getHoursSinceTime';
 
 export class MobibotClient {
   private db: PostgresClient;
@@ -383,11 +384,36 @@ export class MobibotClient {
     hoursBetween?: number,
   ): Promise<string> {
     this.logger.debug(`Handling /session`);
-    const [sessionData, nphData, lastRun] = await Promise.all([
+    // Promise of lastRun - takes a while to return so be optimistic about initial call to session and nph
+    const lastRunPromise = this.paceman.getLatestRun(name);
+
+    let [sessionData, nphData] = await Promise.all([
       this.paceman.getSessionStats(name, hours, hoursBetween),
       this.paceman.getNPH(name, hours, hoursBetween),
-      this.paceman.getRecentRuns(name),
     ]);
+
+    // Use call of lastRun to obtain hours
+    if (sessionData.nether.count === 0) {
+      // Return early is user specified hours
+      if (hours) {
+        return `${appendInvisibleChars(name)} hasn't played in the last ${hours} hours!`;
+      }
+      // Use result of lastRun to determine hours since last session.
+      const lastRun = await lastRunPromise;
+      const searchHours = getHoursSinceTime(lastRun.time) + 24; // add 24 hours to get full session.
+
+      [sessionData, nphData] = await Promise.all([
+        this.paceman.getSessionStats(name, searchHours, hoursBetween),
+        this.paceman.getNPH(name, searchHours, hoursBetween),
+      ]);
+
+      if (sessionData.nether.count === 0) {
+        return `${appendInvisibleChars(name)} hasn't played in the last ${searchHours} hours!`;
+      }
+    }
+
+    // Await return of lastRun
+    const lastRun = await lastRunPromise;
 
     // Collate session data
     const nethers = sessionData.nether
@@ -397,11 +423,7 @@ export class MobibotClient {
       .filter(([key, { count }]) => key !== 'nether' && count > 0)
       .map(([key, { avg, count }]) => `${key}: ${count} (${avg} avg)`);
 
-    // Return message for missing session
-    if (sessionData.nether.count === 0)
-      return `${appendInvisibleChars(name)} hasn't played in the last ${hours} hours!`;
-
-    const timeInfo = `Playtime: ${getRelativeTime((nphData.playtime + nphData.walltime) / 1000)}, ${getRelativeTimeFromTimestamp(lastRun[0].time)} ago`;
+    const timeInfo = `Playtime: ${getRelativeTime((nphData.playtime + nphData.walltime) / 1000)}, ${getRelativeTimeFromTimestamp(lastRun.time)} ago`;
 
     const sections = [
       `${appendInvisibleChars(name)} Session`,

@@ -5,6 +5,8 @@ import { type Logger as PinoLogger } from 'pino';
 import { Service } from '../types/app';
 import {
   Day,
+  LastestRun,
+  latestRunSchema,
   Leaderboard,
   NPH,
   nphSchema,
@@ -99,6 +101,24 @@ export class PacemanClient {
     if (!parsedData) {
       this.logger.error(data, 'Invalid response from getRecentRuns');
       throw new Error('Invalid response from getRecentRuns');
+    }
+
+    return parsedData;
+  }
+
+  async getLatestRun(name: string): Promise<LastestRun> {
+    this.logger.debug(`Handling /getLatestRun ${name}`);
+
+    const params: Record<string, number | string> = { name };
+
+    const { data } = await this.api.get<LastestRun>('/getLatestRun', {
+      params,
+    });
+
+    const parsedData = latestRunSchema.parse(data);
+    if (!parsedData) {
+      this.logger.error(data, 'Invalid response from getLatestRun');
+      throw new Error('Invalid response from getLatestRun');
     }
 
     return parsedData;
