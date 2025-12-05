@@ -1,4 +1,4 @@
-import z from 'zod';
+import z, { optional } from 'zod';
 
 import { TwitchColor } from './twitch';
 
@@ -97,17 +97,17 @@ export const MatchSeedSchema = z.object({
 export const MatchSchema = z.object({
   changes: z.array(
     z.object({
-      change: z.number().nullable(),
-      eloRate: z.number().nullable(),
+      change: z.number().nullable().optional(),
+      eloRate: z.number().nullable().optional(),
       uuid: z.string(),
     }),
   ),
-  date: z.number(), // in seconds
-  forfeited: z.boolean(),
+  date: z.number().optional(), // in seconds
+  forfeited: z.boolean().optional(),
   id: z.number(),
   players: z.array(UserProfileSchema),
   result: z.object({
-    time: z.number(),
+    time: z.number().optional(),
     uuid: z.string().optional().nullable(),
   }),
   season: z.number(),
@@ -119,50 +119,50 @@ export const SeasonResultSchema = z.object({
   last: z.object({
     eloRank: z.number().nullable().optional(),
     eloRate: z.number().nullable().optional(),
-    phasePoint: z.number(),
+    phasePoint: z.number().optional(),
   }),
-  lowest: z.number().nullable(),
+  lowest: z.number().nullable().optional(),
 });
 export const StatisticsItemSchema = z.object({
   bestTime: z.object({
-    casual: z.number().nullable(),
-    ranked: z.number().nullable(),
+    casual: z.number().nullable().optional(),
+    ranked: z.number().nullable().optional(),
   }),
   completions: z.object({
-    casual: z.number(),
-    ranked: z.number(),
+    casual: z.number().optional(),
+    ranked: z.number().optional(),
   }),
   completionTime: z.object({
-    casual: z.number(),
-    ranked: z.number(),
+    casual: z.number().optional(),
+    ranked: z.number().optional(),
   }),
   currentWinStreak: z.object({
-    casual: z.number(),
-    ranked: z.number(),
+    casual: z.number().optional(),
+    ranked: z.number().optional(),
   }),
   forfeits: z.object({
-    casual: z.number(),
-    ranked: z.number(),
+    casual: z.number().optional(),
+    ranked: z.number().optional(),
   }),
   highestWinStreak: z.object({
-    casual: z.number(),
-    ranked: z.number(),
+    casual: z.number().optional(),
+    ranked: z.number().optional(),
   }),
   loses: z.object({
-    casual: z.number(),
-    ranked: z.number(),
+    casual: z.number().optional(),
+    ranked: z.number().optional(),
   }),
   playedMatches: z.object({
-    casual: z.number(),
-    ranked: z.number(),
+    casual: z.number().optional(),
+    ranked: z.number().optional(),
   }),
   playtime: z.object({
-    casual: z.number(),
-    ranked: z.number(),
+    casual: z.number().optional(),
+    ranked: z.number().optional(),
   }),
   wins: z.object({
-    casual: z.number(),
-    ranked: z.number(),
+    casual: z.number().optional(),
+    ranked: z.number().optional(),
   }),
 });
 export const StatisticsSchema = z.object({
@@ -174,11 +174,11 @@ export const GetUserDataResponseSchema = z.object({
     seasonResult: SeasonResultSchema,
     statistics: StatisticsSchema,
   }),
-  status: z.string(),
+  status: z.string().optional(),
 });
 export const MatchesResponseSchema = z.object({
   data: z.array(MatchSchema),
-  status: z.string(),
+  status: z.string().optional(),
 });
 export const VSResponseSchema = z.object({
   data: z.object({
@@ -186,7 +186,7 @@ export const VSResponseSchema = z.object({
     results: z.object({
       ranked: z
         .object({
-          total: z.number(),
+          total: z.number().optional(),
         })
         .and(z.record(z.string(), z.number())),
     }),
@@ -196,21 +196,21 @@ export const VSResponseSchema = z.object({
 export const LeaderboardResponseSchema = z.object({
   data: z.object({
     season: z.object({
-      endsAt: z.number(),
-      number: z.number(),
-      startsAt: z.number(),
+      endsAt: z.number().optional(),
+      number: z.number().optional(),
+      startsAt: z.number().optional(),
     }),
     users: z.array(
       UserProfileSchema.extend({
         seasonResult: z.object({
-          eloRank: z.number(),
-          eloRate: z.number(),
-          phasePoint: z.number(),
+          eloRank: z.number().optional(),
+          eloRate: z.number().optional(),
+          phasePoint: z.number().optional(),
         }),
       }),
     ),
   }),
-  status: z.string(),
+  status: z.string().optional(),
 });
 
 export type GetUserDataResponse = z.infer<typeof GetUserDataResponseSchema>;

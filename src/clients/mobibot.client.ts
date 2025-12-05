@@ -8,6 +8,7 @@ import { MatchType, NETHER_TYPE, OVERWORLD_TYPE } from '../types/ranked';
 import { appendInvisibleChars } from '../util/appendInvisibleChars';
 import { capitalizeWords } from '../util/capitalizeWords';
 import { getFlag } from '../util/getFlag';
+import { getHoursSinceTime } from '../util/getHoursSinceTime';
 import {
   getRelativeTime,
   getRelativeTimeFromTimestamp,
@@ -19,7 +20,6 @@ import { msToYMDH } from '../util/msToYMDH';
 import { PacemanClient } from './paceman.api';
 import { PostgresClient } from './postgres.client';
 import { RankedClient } from './ranked.api';
-import { getHoursSinceTime } from '../util/getHoursSinceTime';
 
 export class MobibotClient {
   private db: PostgresClient;
@@ -120,9 +120,10 @@ export class MobibotClient {
     );
 
     // Overall Statistics
-    const totalCompletions = userData.data.statistics.season.completions.ranked;
+    const totalCompletions =
+      userData.data.statistics.season.completions.ranked || 0;
     const totalCompletionTime =
-      userData.data.statistics.season.completionTime.ranked;
+      userData.data.statistics.season.completionTime.ranked || 0;
     const completionAvg = totalCompletionTime / totalCompletions;
 
     const sections = [
@@ -152,15 +153,16 @@ export class MobibotClient {
     const data = userData.data;
     // Statistics
     const elo = data.eloRate;
-    const totalMatches = data.statistics.season.playedMatches.ranked;
-    const wins = data.statistics.season.wins.ranked;
-    const losses = data.statistics.season.loses.ranked;
+    const totalMatches = data.statistics.season.playedMatches.ranked || 0;
+    const wins = data.statistics.season.wins.ranked || 0;
+    const losses = data.statistics.season.loses.ranked || 0;
     const winrate = (wins / (wins + losses)) * 100;
     const pb = data.statistics.season.bestTime.ranked;
-    const forfeits = data.statistics.season.forfeits.ranked;
+    const forfeits = data.statistics.season.forfeits.ranked || 0;
     const forfeitrate = (forfeits / totalMatches) * 100;
-    const totalCompletions = data.statistics.season.completions.ranked;
-    const totalCompletionTime = data.statistics.season.completionTime.ranked;
+    const totalCompletions = data.statistics.season.completions.ranked || 0;
+    const totalCompletionTime =
+      data.statistics.season.completionTime.ranked || 0;
     const completionAvg = totalCompletionTime / totalCompletions;
 
     const sections = [
@@ -303,8 +305,10 @@ export class MobibotClient {
       this.ranked.getUserData(name, currentSeason),
     ]);
 
-    const rankedSeasonPlaytime = ranked.data.statistics.season.playtime.ranked;
-    const rankedTotalPlaytime = ranked.data.statistics.total.playtime.ranked;
+    const rankedSeasonPlaytime =
+      ranked.data.statistics.season.playtime.ranked || 0;
+    const rankedTotalPlaytime =
+      ranked.data.statistics.total.playtime.ranked || 0;
     const rsgPlaytime = rsg.playtime;
     const rsgTotalResets = rsg.totalResets;
 
@@ -443,7 +447,7 @@ export class MobibotClient {
       this.ranked.getRecentMatches(name),
     ]);
     const todayMatches = recentMatches.data.filter((match) =>
-      isTodayUTC(match.date),
+      isTodayUTC(match.date || 0),
     );
 
     const data = userData.data;
@@ -595,10 +599,10 @@ export class MobibotClient {
     }, initial);
 
     // Overall Statistics
-    const totalWins = userData.data.statistics.season.wins.ranked;
+    const totalWins = userData.data.statistics.season.wins.ranked || 0;
     const totalMatches =
-      userData.data.statistics.season.wins.ranked +
-      userData.data.statistics.season.loses.ranked;
+      (userData.data.statistics.season.wins.ranked || 0) +
+      (userData.data.statistics.season.loses.ranked || 0);
     const totalWinrate = (totalWins / totalMatches) * 100;
 
     const sections = [
