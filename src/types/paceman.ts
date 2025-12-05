@@ -33,17 +33,17 @@ export const runSchema = z.object({
   finish: z.number().nullable().optional(),
 });
 export const nphSchema = z.object({
-  rtanph: z.number(),
-  rnph: z.number(),
-  lnph: z.number(),
-  count: z.number(),
-  avg: z.number(),
-  playtime: z.number(),
-  walltime: z.number(),
-  resets: z.number(),
-  totalResets: z.number(),
-  seedsPlayed: z.number(),
-  rpe: z.number(),
+  rtanph: z.number().nullable(),
+  rnph: z.number().nullable(),
+  lnph: z.number().nullable(),
+  count: z.number().nullable(),
+  avg: z.number().nullable(),
+  playtime: z.number().nullable(),
+  walltime: z.number().nullable(),
+  resets: z.number().nullable(),
+  totalResets: z.number().nullable(),
+  seedsPlayed: z.number().nullable(),
+  rpe: z.number().nullable(),
 });
 export const sessionItemSchema = z.object({
   count: z.number(),

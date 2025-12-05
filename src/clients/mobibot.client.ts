@@ -309,8 +309,8 @@ export class MobibotClient {
       ranked.data.statistics.season.playtime.ranked || 0;
     const rankedTotalPlaytime =
       ranked.data.statistics.total.playtime.ranked || 0;
-    const rsgPlaytime = rsg.playtime;
-    const rsgTotalResets = rsg.totalResets;
+    const rsgPlaytime = rsg.playtime || 0;
+    const rsgTotalResets = rsg.totalResets || 0;
 
     const sections = [
       `${appendInvisibleChars(name)} playtime`,
@@ -423,11 +423,13 @@ export class MobibotClient {
     const nethers = sessionData.nether
       ? `nethers: ${sessionData.nether.count} (${sessionData.nether.avg} avg, ${nphData.rnph} nph, ${nphData.rpe} rpe)`
       : '';
+    const playtime = nphData.playtime || 0;
+    const walltime = nphData.walltime || 0;
     const splits = Object.entries(sessionData)
       .filter(([key, { count }]) => key !== 'nether' && count > 0)
       .map(([key, { avg, count }]) => `${key}: ${count} (${avg} avg)`);
 
-    const timeInfo = `Playtime: ${getRelativeTime((nphData.playtime + nphData.walltime) / 1000)}, ${getRelativeTimeFromTimestamp(lastRun.time)} ago`;
+    const timeInfo = `Playtime: ${getRelativeTime((playtime + walltime) / 1000)}, ${getRelativeTimeFromTimestamp(lastRun.time)} ago`;
 
     const sections = [
       `${appendInvisibleChars(name)} Session`,
@@ -526,15 +528,17 @@ export class MobibotClient {
     }, 0);
 
     // Total time in-between seeds
-    const wastedTime = nph.playtime - inSeedPlaytime;
+    const playtime = nph.playtime || 0;
+    const walltime = nph.walltime || 0;
+    const wastedTime = playtime - inSeedPlaytime;
 
     const sections = [
       `${appendInvisibleChars(name)} Wasted Time`,
       `${msToTime(wastedTime / session.nether.count, false)} avg wasted time spent per enter`,
-      `${msToTime(wastedTime, false)} total wasted time (${((wastedTime / nph.playtime) * 100).toFixed(1)}%)`,
-      `${msToTime(inSeedPlaytime, false)} spent in overworlds that entered (${((inSeedPlaytime / nph.playtime) * 100).toFixed(1)}%)`,
-      `${msToTime(nph.playtime, false)} total playtime`,
-      `${msToTime(nph.walltime, false)} total walltime`,
+      `${msToTime(wastedTime, false)} total wasted time (${((wastedTime / playtime) * 100).toFixed(1)}%)`,
+      `${msToTime(inSeedPlaytime, false)} spent in overworlds that entered (${((inSeedPlaytime / playtime) * 100).toFixed(1)}%)`,
+      `${msToTime(playtime, false)} total playtime`,
+      `${msToTime(walltime, false)} total walltime`,
     ];
     return sections.join(' \u2756 ');
   }
