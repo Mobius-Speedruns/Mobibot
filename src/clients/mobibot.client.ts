@@ -101,7 +101,7 @@ export class MobibotClient {
         if (seed.overworld) {
           acc.overworld[seed.overworld].total += 1;
           if (isWin) {
-            acc.overworld[seed.overworld].completions += match.result.time;
+            acc.overworld[seed.overworld].completions += match.result.time || 0;
           }
         }
 
@@ -110,7 +110,7 @@ export class MobibotClient {
           acc.nether[seed.nether].total += 1;
           const isWin = match.result.uuid === uuid;
           if (isWin) {
-            acc.nether[seed.nether].completions += match.result.time;
+            acc.nether[seed.nether].completions += match.result.time || 0;
           }
         }
 
@@ -238,8 +238,8 @@ export class MobibotClient {
     );
 
     const matchTime = mostRecentMatch.forfeited
-      ? `(Forfeit at ${msToTime(mostRecentMatch.result.time)})`
-      : `(${msToTime(mostRecentMatch.result.time)})`;
+      ? `(Forfeit at ${msToTime(mostRecentMatch.result.time || 0)})`
+      : `(${msToTime(mostRecentMatch.result.time || 0)})`;
 
     const sections = [
       `#${player1.eloRank} ${player1.country ? getFlag(player1.country) : ''} ${appendInvisibleChars(player1.nickname)} (${player1.eloRate}) VS #${player2.eloRank} ${player2.country ? getFlag(player2.country) : ''} ${appendInvisibleChars(player2.nickname)} (${player2.eloRate})`,
@@ -247,7 +247,7 @@ export class MobibotClient {
       `Elo Change: ${appendInvisibleChars(player1.nickname)} ${player1Changes?.change && player1Changes.change > 0 ? '+' : ''}${player1Changes?.change} » ${player1Changes?.eloRate} \u2756 ${appendInvisibleChars(player2.nickname)} ${player2Changes?.change && player2Changes.change > 0 ? '+' : ''}${player2Changes?.change} » ${player2Changes?.eloRate}`,
       `Seed Type: ${mostRecentMatch.seed?.overworld} » ${mostRecentMatch.seed?.nether}`,
       `https://mcsrranked.com/stats/${player1.nickname}/${mostRecentMatch.id}`,
-      `${getRelativeTimeFromTimestamp(mostRecentMatch.date)} ago`,
+      `${getRelativeTimeFromTimestamp(mostRecentMatch.date || 0)} ago`,
     ].filter(Boolean);
 
     return sections.join(' \u2756 ');
