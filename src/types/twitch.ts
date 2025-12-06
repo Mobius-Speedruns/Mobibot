@@ -1,5 +1,11 @@
 import z from 'zod';
 
+export type SendMessage = {
+  channel: string;
+  message: string;
+  color?: TwitchColor;
+};
+
 export enum TwitchColor {
   Blue = 'blue',
   BlueViolet = 'blue_violet',
