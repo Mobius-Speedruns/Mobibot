@@ -102,7 +102,7 @@ export class RankedClient {
     return all;
   }
 
-  async getCurrentSeason(): Promise<number> {
+  async getCurrentSeason(): Promise<number | undefined> {
     this.logger.debug(`Handling /getCurrentSeason`);
 
     const { data } = await this.api.get<LeaderboardResponse>(`/leaderboard`);

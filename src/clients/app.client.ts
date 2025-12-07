@@ -1,21 +1,16 @@
 import { Logger as PinoLogger } from 'pino';
 
-import {
-  BotCommand,
-  HOURS,
-  HOURS_BETWEEN,
-  INTEGER_REGEX,
-  NO_ARGUMENT,
-  Service,
-} from '../types/app';
-import { Day, SplitName } from '../types/paceman';
+import { INTEGER_REGEX, Service } from '../types/app';
 import { ChatTags } from '../types/twitch';
 import { parseError } from '../util/parseError';
 import { MobibotClient } from './mobibot.client';
 import { PostgresClient } from './postgres.client';
 import { TwitchClient } from './twitch.client';
+import { CommandFactory } from './commands/command.factory';
+import { CommandError } from './commands/command.error';
 
 export class AppClient {
+  private commandFactory: CommandFactory;
   private client: TwitchClient;
   private db: PostgresClient;
   private logger: PinoLogger;
@@ -50,6 +45,8 @@ export class AppClient {
     } else {
       this.logger.info('Skipping user refresh job (not in production)');
     }
+
+    this.commandFactory = new CommandFactory(mobibotClient, db, client, logger);
   }
 
   public async shutdown() {
@@ -87,7 +84,7 @@ export class AppClient {
     await this.connectToChannels(channels);
 
     this.client.onChatMessage((channel, tags, message) => {
-      this.handleMessage(channel, tags, message).catch((err: unknown) => {
+      this.handleCommand(channel, message, tags).catch((err: unknown) => {
         this.logger.error(err, 'Error handling message');
       });
     });
@@ -119,469 +116,31 @@ export class AppClient {
   // -----------------------------
   // Command Routing
   // -----------------------------
-  private async handleCommand(
+  async handleCommand(
     channel: string,
-    cmd: string,
-    mcName: string,
-    args: string[],
-  ): Promise<void> {
-    let response: string | void;
-    let color: string | undefined = undefined;
-
-    if (!NO_ARGUMENT.includes(cmd as BotCommand)) {
-      if (!mcName) {
-        await this.client.send(channel, 'Player not found.');
-        return;
-      }
-    }
-
-    switch (cmd.toLowerCase() as BotCommand) {
-      case BotCommand.ALLTIME:
-        response = await this.mobibotClient.rsgLeaderboard(Day.ALLTIME);
-        break;
-      case BotCommand.AVERAGE: {
-        const season = this.parseIntArg(args[0]) || undefined;
-        response = await this.mobibotClient.average(mcName, season);
-        break;
-      }
-      case BotCommand.COMMANDS:
-      case BotCommand.COMMANDSALT:
-      case BotCommand.HELP:
-        response =
-          'Documentation is available at https://github.com/Mobius-Speedruns/Mobibot/wiki';
-        break;
-      case BotCommand.DAILY:
-        response = await this.mobibotClient.rsgLeaderboard(Day.DAILY);
-        break;
-      case BotCommand.ELO: {
-        const season = this.parseIntArg(args[0]) || undefined;
-        const data = await this.mobibotClient.elo(mcName, season);
-        response = data.response;
-        color = data.color;
-        break;
-      }
-      case BotCommand.LASTBASTION:
-        response = await this.mobibotClient.lastsplit(
-          mcName,
-          SplitName.BASTION,
-        );
-        break;
-      case BotCommand.LASTBLIND:
-        response = await this.mobibotClient.lastsplit(mcName, SplitName.BLIND);
-        break;
-      case BotCommand.LASTCOMPLETION:
-      case BotCommand.LASTFINISH:
-        response = await this.mobibotClient.lastsplit(mcName, SplitName.FINISH);
-        break;
-      case BotCommand.LASTEND:
-        response = await this.mobibotClient.lastsplit(mcName, SplitName.END);
-        break;
-      case BotCommand.LASTENTER:
-      case BotCommand.LASTNETHER:
-        response = await this.mobibotClient.lastsplit(mcName, SplitName.NETHER);
-        break;
-      case BotCommand.LASTFORT:
-      case BotCommand.LASTPACE:
-        response = await this.mobibotClient.lastsplit(
-          mcName,
-          SplitName.FORTRESS,
-        );
-        break;
-      case BotCommand.LASTMATCH:
-        response = await this.mobibotClient.lastmatch(mcName);
-        break;
-      case BotCommand.LASTSTRONGHOLD:
-        response = await this.mobibotClient.lastsplit(
-          mcName,
-          SplitName.STRONGHOLD,
-        );
-        break;
-      case BotCommand.LB:
-      case BotCommand.LEADERBOARD: {
-        const season = this.parseIntArg(args[0]) || undefined;
-        response = await this.mobibotClient.rankedLeaderboard(season);
-        break;
-      }
-      case BotCommand.MONTHLY:
-        response = await this.mobibotClient.rsgLeaderboard(Day.MONTHLY);
-        break;
-      case BotCommand.PB:
-        response = await this.mobibotClient.pb(mcName);
-        break;
-      case BotCommand.PLAYTIME: {
-        const season = this.parseIntArg(args[0]) || undefined;
-        response = await this.mobibotClient.playtime(mcName, season);
-        break;
-      }
-      case BotCommand.RECORD:
-      case BotCommand.VS: {
-        if (args.length >= 1) {
-          const season = this.parseIntArg(args[1]) || undefined;
-          const opp = await this.mobibotClient.getRealNickname(args[0]);
-          if (!opp) {
-            await this.client.send(channel, `Player ${args[0]} not found.`);
-            return;
-          }
-          response = await this.mobibotClient.record(mcName, opp, season);
-        } else {
-          await this.client.send(
-            channel,
-            `⚠️ Please provide at least two Minecraft Usernames for the record command.`,
-          );
-          return;
-        }
-        break;
-      }
-      case BotCommand.RESETS: {
-        const resetHours = this.parseIntArg(args[0]) || HOURS;
-        const resetHoursBetween = this.parseIntArg(args[1]) || HOURS_BETWEEN;
-        response = await this.mobibotClient.resets(
-          mcName,
-          resetHours,
-          resetHoursBetween,
-        );
-        break;
-      }
-      case BotCommand.SEEDWAVE:
-        response = await this.mobibotClient.seedwave();
-        break;
-      case BotCommand.SESSION: {
-        const hours = this.parseIntArg(args[0]) || undefined; // let session handle default
-        const hoursBetween = this.parseIntArg(args[1]) || undefined;
-        response = await this.mobibotClient.session(
-          mcName,
-          hours,
-          hoursBetween,
-        );
-        break;
-      }
-      case BotCommand.TODAY: {
-        const data = await this.mobibotClient.today(mcName);
-        response = data.response;
-        color = data.color;
-        break;
-      }
-      case BotCommand.WASTED: {
-        const hours = this.parseIntArg(args[0]) || HOURS;
-        const hoursBetween = this.parseIntArg(args[1]) || HOURS_BETWEEN;
-        response = await this.mobibotClient.wastedTime(
-          mcName,
-          hours,
-          hoursBetween,
-        );
-        break;
-      }
-      case BotCommand.WEEKLY:
-        response = await this.mobibotClient.rsgLeaderboard(Day.WEEKLY);
-        break;
-      case BotCommand.WINRATE: {
-        const season = this.parseIntArg(args[0]) || undefined;
-        response = await this.mobibotClient.winrate(mcName, season);
-        break;
-      }
-      default:
-        return;
-    }
-
-    if (response) {
-      await this.client.send(channel, response, color);
-    }
-  }
-
-  private async handleCommandBang(
-    channel: string,
-    cmd: string,
-    username: string,
-    args: string[],
-  ) {
-    // For ! commands, use the channel's linked MC name
-    const chanName = channel.replace('#', '');
-    const channelMcName = await this.db.getMcName(chanName);
-    if (!channelMcName) {
-      await this.client.send(
-        channel,
-        `⚠️ No linked Minecraft username for this channel. Please link one using !link.`,
-      );
-      return;
-    }
-
-    await this.handleCommand(channel, cmd, channelMcName, args);
-  }
-
-  private async handleCommandPlus(
-    channel: string,
-    cmd: string,
-    username: string,
-    args: string[],
-  ) {
-    let mcName: string;
-    let remainingArgs: string[];
-
-    if (NO_ARGUMENT.includes(cmd as BotCommand)) {
-      mcName = '';
-      remainingArgs = args;
-    } else if (args.length > 0 && !INTEGER_REGEX.test(args[0])) {
-      // First arg is a username override
-      mcName = (await this.mobibotClient.getRealNickname(args[0])) || '';
-      remainingArgs = args.slice(1);
-    } else {
-      mcName = '';
-      // Use subscribed username
-      const subscribedMcName = await this.db.getMcName(username);
-
-      // If no subscribed username, attempt to find twitch relation
-      if (!subscribedMcName) {
-        this.logger.debug(`User ${username} not joined, attempting cache.`);
-        mcName =
-          (await this.mobibotClient.getRealNickname(`@${username}`)) || '';
-      }
-      // Otherwise, use available subscribed name
-      else {
-        mcName = subscribedMcName;
-      }
-
-      if (!mcName) {
-        await this.client.send(
-          channel,
-          `⚠️ You must use !link to link your Minecraft username to your twitch account before using +${cmd}.`,
-        );
-        return;
-      }
-      remainingArgs = args;
-    }
-
-    await this.handleCommand(channel, cmd, mcName, remainingArgs);
-  }
-
-  private async handleMessage(
-    channel: string,
-    tags: ChatTags,
     message: string,
-  ) {
-    // Handle + and ! commands
-    const isPlus = message.startsWith('+');
-    const isBang = message.startsWith('!');
-
-    // Don't process message if it is not a command.
-    if (!isPlus && !isBang) return;
-
-    const username = tags.username || '';
-    const lower = message.toLowerCase().trim();
-
-    const parts = lower.slice(1).trim().split(/\s+/);
-    const cmd = parts[0];
-    const args = parts.slice(1);
-
-    // Subscription / link commands
-    switch (cmd) {
-      case 'join':
-        return this.join(username, channel, message);
-      case 'leave':
-        return this.leave(username, channel);
-      case 'link':
-        return this.link(username, channel, message);
-      case 'ping':
-        return this.client.send(channel, 'pong!');
-      case 'unlink':
-        return this.unlink(username, channel);
-    }
-
-    // Don't process if it is not a valid mobibot command.
-    if (!Object.values(BotCommand).includes(cmd as BotCommand)) return;
-
+    tags: ChatTags,
+  ): Promise<void> {
     try {
-      if (isPlus) {
-        await this.handleCommandPlus(channel, cmd, username, args);
-      } else {
-        await this.handleCommandBang(channel, cmd, username, args);
-      }
-    } catch (err) {
-      this.logger.error(err);
-    }
-  }
-
-  // -----------------------------
-  // Subscriptions
-  // -----------------------------
-  private async join(requester: string, channel: string, message: string) {
-    const chanName = requester.toLowerCase();
-    const userName = message.split(' ')[1];
-
-    // Check for existing channel
-    const existingChannel = await this.db.getChannel(chanName);
-    if (!existingChannel) {
-      // Bail if no username provided
-      if (!userName) {
+      const command = this.commandFactory.getCommand(message);
+      if (!command) return;
+      const response = await command.handle(channel, message, tags);
+      if (response)
         await this.client.send(
-          channel,
-          `⚠️ Please provide your Minecraft username after !join.`,
+          response.channel,
+          response.message,
+          response.color,
         );
+    } catch (err: unknown) {
+      if (err instanceof CommandError) {
+        // Send the user-facing error message to the channel
+        await this.client.send(channel, err.userMessage);
         return;
       }
 
-      // Check username
-      const mcName = await this.mobibotClient.getRealNickname(userName);
-      if (!mcName) {
-        await this.client.send(channel, `⚠️ Player not found in paceman.`);
-        return;
-      }
-
-      // Alert user about joining.
-      let message = `✅ Mobibot joined ${chanName} with Minecraft username: ${userName}`;
-
-      this.logger.debug(`${mcName} - ${userName}`);
-      // Alert user for possible misspell.
-      if (!mcName || mcName !== userName)
-        message += `. Note, you may have misspelled your username, some commands are case sensitive!`;
-
-      // Add channel
-      try {
-        await this.db.createChannel(chanName, userName, true); // Create the channel
-        await this.client.subscribe(chanName); // Subscribe to channel's chat
-        await this.client.send(channel, message);
-      } catch (err: unknown) {
-        if (err instanceof Error) {
-          this.logger.error(`Failed to subscribe ${chanName}: ${err.message}`);
-        } else {
-          this.logger.error(`Failed to subscribe ${chanName}: ${String(err)}`);
-        }
-
-        await this.client.send(
-          channel,
-          `⚠️ Could not join to ${chanName} due to a database error.`,
-        );
-      }
-      return;
+      // Log unexpected errors but do not forward them to chat
+      this.logger.error(err, 'Error executing command');
     }
-
-    // Channel exists, check if they are subscribed.
-    const isSubscribed = existingChannel.subscribed;
-    if (!isSubscribed) {
-      // Join channel
-      try {
-        await this.db.updateSubscription(chanName, true);
-        await this.client.send(channel, `✅ Mobibot joined ${chanName}`);
-      } catch (err: unknown) {
-        if (err instanceof Error) {
-          this.logger.error(`Failed to subscribe ${chanName}: ${err.message}`);
-        } else {
-          this.logger.error(`Failed to subscribe ${chanName}: ${String(err)}`);
-        }
-
-        await this.client.send(
-          channel,
-          `⚠️ Could not join to ${chanName} due to a database error.`,
-        );
-      }
-
-      return;
-    } else {
-      await this.client.send(
-        channel,
-        `⚠️ Already joined. Use !link to update your Minecraft username, or !leave to remove Mobibot from your channel.`,
-      );
-      return;
-    }
-  }
-
-  private async leave(requester: string, channel: string) {
-    const chanName = requester.toLowerCase();
-
-    if (chanName === process.env.HQ_TWITCH) {
-      await this.client.send(channel, `⚠️ Cannot leave from HQ channel.`);
-      return;
-    }
-
-    try {
-      const existingChannel = await this.db.getChannel(chanName);
-      if (existingChannel?.subscribed) await this.client.unsubscribe(chanName);
-    } catch {
-      await this.client.send(
-        channel,
-        `⚠️ Could not leave ${chanName} due to an error. Please contact mobiusspeedruns.`,
-      );
-      this.logger.error(`Failed to unsubscribe ${chanName}`);
-      return;
-    }
-
-    try {
-      // 2. If successful, try removing from DB
-      const removed = await this.db.removeChannel(chanName);
-
-      if (removed) {
-        await this.client.send(channel, `❌ Mobibot left ${chanName}`);
-      } else {
-        // rollback? re-subscribe? at least log
-        this.logger.warn(
-          `Unsubscribed from Twitch but channel ${chanName} not found in DB.`,
-        );
-        await this.client.send(
-          channel,
-          `⚠️ Channel was not found in database.`,
-        );
-      }
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        this.logger.error(`Failed to unsubscribe ${chanName}: ${err.message}`);
-      } else {
-        this.logger.error(`Failed to unsubscribe ${chanName}: ${String(err)}`);
-      }
-      await this.client.send(
-        channel,
-        `⚠️ Could not leave ${chanName} due to an error.`,
-      );
-    }
-  }
-
-  private async link(requester: string, channel: string, message: string) {
-    const chanName = requester.toLowerCase();
-    const userName = message.split(' ')[1];
-
-    if (!userName) {
-      await this.client.send(
-        channel,
-        `⚠️ Please provide your Minecraft username after !link.`,
-      );
-      return;
-    }
-
-    const mcName = await this.mobibotClient.getRealNickname(userName);
-
-    try {
-      const row = await this.db.upsertChannel(chanName, userName);
-
-      // Alert user about joining.
-      let joinAlert: string = '';
-      if (!row?.subscribed)
-        joinAlert = '. Please use !join if you want Mobibot to join your chat';
-      let message = `✅ Linked Minecraft username ${userName} to ${chanName}${joinAlert}`;
-
-      // Alert user for possible misspell.
-      this.logger.debug(`${mcName} - ${userName}`);
-      if (!mcName || mcName !== userName)
-        message += `. Note, you may have misspelled your username, some commands are case sensitive!`;
-      await this.client.send(channel, message);
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        this.logger.error(
-          `Failed to link MC username for ${chanName}: ${err.message}`,
-        );
-      } else {
-        this.logger.error(
-          `Failed to link MC username for ${chanName}: ${String(err)}`,
-        );
-      }
-
-      await this.client.send(
-        channel,
-        `⚠️ Could not link Minecraft username due to a database error.`,
-      );
-    }
-  }
-
-  private parseIntArg(arg: string): null | number {
-    if (!arg || !INTEGER_REGEX.test(arg)) return null;
-    return Number(arg);
   }
 
   private async refreshUsers(): Promise<void> {
@@ -602,48 +161,5 @@ export class AppClient {
     }
 
     this.logger.info(`Refreshed ${users.length} users.`);
-  }
-
-  private async unlink(requester: string, channel: string) {
-    const chanName = requester.toLowerCase();
-
-    try {
-      const mcUsername = await this.db.getMcName(chanName);
-
-      if (!mcUsername) {
-        await this.client.send(
-          channel,
-          `⚠️ No linked Minecraft username to ${chanName}`,
-        );
-        return;
-      }
-
-      const row = await this.db.upsertChannel(chanName);
-      // Alert user about joining.
-      let leaveAlert: string = '';
-      if (row?.subscribed)
-        leaveAlert =
-          '. Please use !leave if you want Mobibot to leave your chat';
-
-      await this.client.send(
-        channel,
-        `❌ Unlinked ${mcUsername} for ${chanName}${leaveAlert}`,
-      );
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        this.logger.error(
-          `Failed to unlink MC username for ${chanName}: ${err.message}`,
-        );
-      } else {
-        this.logger.error(
-          `Failed to unlink MC username for ${chanName}: ${String(err)}`,
-        );
-      }
-
-      await this.client.send(
-        channel,
-        `⚠️ Could not unlink Minecraft username due to a database error.`,
-      );
-    }
   }
 }

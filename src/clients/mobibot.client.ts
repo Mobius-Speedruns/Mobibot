@@ -8,6 +8,7 @@ import { MatchType, NETHER_TYPE, OVERWORLD_TYPE } from '../types/ranked';
 import { appendInvisibleChars } from '../util/appendInvisibleChars';
 import { capitalizeWords } from '../util/capitalizeWords';
 import { getFlag } from '../util/getFlag';
+import { getHoursSinceTime } from '../util/getHoursSinceTime';
 import {
   getRelativeTime,
   getRelativeTimeFromTimestamp,
@@ -19,7 +20,6 @@ import { msToYMDH } from '../util/msToYMDH';
 import { PacemanClient } from './paceman.api';
 import { PostgresClient } from './postgres.client';
 import { RankedClient } from './ranked.api';
-import { getHoursSinceTime } from '../util/getHoursSinceTime';
 
 export class MobibotClient {
   private db: PostgresClient;
@@ -101,7 +101,7 @@ export class MobibotClient {
         if (seed.overworld) {
           acc.overworld[seed.overworld].total += 1;
           if (isWin) {
-            acc.overworld[seed.overworld].completions += match.result.time;
+            acc.overworld[seed.overworld].completions += match.result.time || 0;
           }
         }
 
@@ -110,7 +110,7 @@ export class MobibotClient {
           acc.nether[seed.nether].total += 1;
           const isWin = match.result.uuid === uuid;
           if (isWin) {
-            acc.nether[seed.nether].completions += match.result.time;
+            acc.nether[seed.nether].completions += match.result.time || 0;
           }
         }
 
@@ -120,9 +120,10 @@ export class MobibotClient {
     );
 
     // Overall Statistics
-    const totalCompletions = userData.data.statistics.season.completions.ranked;
+    const totalCompletions =
+      userData.data.statistics.season.completions.ranked || 0;
     const totalCompletionTime =
-      userData.data.statistics.season.completionTime.ranked;
+      userData.data.statistics.season.completionTime.ranked || 0;
     const completionAvg = totalCompletionTime / totalCompletions;
 
     const sections = [
@@ -152,15 +153,16 @@ export class MobibotClient {
     const data = userData.data;
     // Statistics
     const elo = data.eloRate;
-    const totalMatches = data.statistics.season.playedMatches.ranked;
-    const wins = data.statistics.season.wins.ranked;
-    const losses = data.statistics.season.loses.ranked;
+    const totalMatches = data.statistics.season.playedMatches.ranked || 0;
+    const wins = data.statistics.season.wins.ranked || 0;
+    const losses = data.statistics.season.loses.ranked || 0;
     const winrate = (wins / (wins + losses)) * 100;
     const pb = data.statistics.season.bestTime.ranked;
-    const forfeits = data.statistics.season.forfeits.ranked;
+    const forfeits = data.statistics.season.forfeits.ranked || 0;
     const forfeitrate = (forfeits / totalMatches) * 100;
-    const totalCompletions = data.statistics.season.completions.ranked;
-    const totalCompletionTime = data.statistics.season.completionTime.ranked;
+    const totalCompletions = data.statistics.season.completions.ranked || 0;
+    const totalCompletionTime =
+      data.statistics.season.completionTime.ranked || 0;
     const completionAvg = totalCompletionTime / totalCompletions;
 
     const sections = [
@@ -236,8 +238,8 @@ export class MobibotClient {
     );
 
     const matchTime = mostRecentMatch.forfeited
-      ? `(Forfeit at ${msToTime(mostRecentMatch.result.time)})`
-      : `(${msToTime(mostRecentMatch.result.time)})`;
+      ? `(Forfeit at ${msToTime(mostRecentMatch.result.time || 0)})`
+      : `(${msToTime(mostRecentMatch.result.time || 0)})`;
 
     const sections = [
       `#${player1.eloRank} ${player1.country ? getFlag(player1.country) : ''} ${appendInvisibleChars(player1.nickname)} (${player1.eloRate}) VS #${player2.eloRank} ${player2.country ? getFlag(player2.country) : ''} ${appendInvisibleChars(player2.nickname)} (${player2.eloRate})`,
@@ -245,7 +247,7 @@ export class MobibotClient {
       `Elo Change: ${appendInvisibleChars(player1.nickname)} ${player1Changes?.change && player1Changes.change > 0 ? '+' : ''}${player1Changes?.change} » ${player1Changes?.eloRate} \u2756 ${appendInvisibleChars(player2.nickname)} ${player2Changes?.change && player2Changes.change > 0 ? '+' : ''}${player2Changes?.change} » ${player2Changes?.eloRate}`,
       `Seed Type: ${mostRecentMatch.seed?.overworld} » ${mostRecentMatch.seed?.nether}`,
       `https://mcsrranked.com/stats/${player1.nickname}/${mostRecentMatch.id}`,
-      `${getRelativeTimeFromTimestamp(mostRecentMatch.date)} ago`,
+      `${getRelativeTimeFromTimestamp(mostRecentMatch.date || 0)} ago`,
     ].filter(Boolean);
 
     return sections.join(' \u2756 ');
@@ -303,10 +305,12 @@ export class MobibotClient {
       this.ranked.getUserData(name, currentSeason),
     ]);
 
-    const rankedSeasonPlaytime = ranked.data.statistics.season.playtime.ranked;
-    const rankedTotalPlaytime = ranked.data.statistics.total.playtime.ranked;
-    const rsgPlaytime = rsg.playtime;
-    const rsgTotalResets = rsg.totalResets;
+    const rankedSeasonPlaytime =
+      ranked.data.statistics.season.playtime.ranked || 0;
+    const rankedTotalPlaytime =
+      ranked.data.statistics.total.playtime.ranked || 0;
+    const rsgPlaytime = rsg.playtime || 0;
+    const rsgTotalResets = rsg.totalResets || 0;
 
     const sections = [
       `${appendInvisibleChars(name)} playtime`,
@@ -419,11 +423,13 @@ export class MobibotClient {
     const nethers = sessionData.nether
       ? `nethers: ${sessionData.nether.count} (${sessionData.nether.avg} avg, ${nphData.rnph} nph, ${nphData.rpe} rpe)`
       : '';
+    const playtime = nphData.playtime || 0;
+    const walltime = nphData.walltime || 0;
     const splits = Object.entries(sessionData)
       .filter(([key, { count }]) => key !== 'nether' && count > 0)
       .map(([key, { avg, count }]) => `${key}: ${count} (${avg} avg)`);
 
-    const timeInfo = `Playtime: ${getRelativeTime((nphData.playtime + nphData.walltime) / 1000)}, ${getRelativeTimeFromTimestamp(lastRun.time)} ago`;
+    const timeInfo = `Playtime: ${getRelativeTime((playtime + walltime) / 1000)}, ${getRelativeTimeFromTimestamp(lastRun.time)} ago`;
 
     const sections = [
       `${appendInvisibleChars(name)} Session`,
@@ -443,7 +449,7 @@ export class MobibotClient {
       this.ranked.getRecentMatches(name),
     ]);
     const todayMatches = recentMatches.data.filter((match) =>
-      isTodayUTC(match.date),
+      isTodayUTC(match.date || 0),
     );
 
     const data = userData.data;
@@ -522,15 +528,17 @@ export class MobibotClient {
     }, 0);
 
     // Total time in-between seeds
-    const wastedTime = nph.playtime - inSeedPlaytime;
+    const playtime = nph.playtime || 0;
+    const walltime = nph.walltime || 0;
+    const wastedTime = playtime - inSeedPlaytime;
 
     const sections = [
       `${appendInvisibleChars(name)} Wasted Time`,
       `${msToTime(wastedTime / session.nether.count, false)} avg wasted time spent per enter`,
-      `${msToTime(wastedTime, false)} total wasted time (${((wastedTime / nph.playtime) * 100).toFixed(1)}%)`,
-      `${msToTime(inSeedPlaytime, false)} spent in overworlds that entered (${((inSeedPlaytime / nph.playtime) * 100).toFixed(1)}%)`,
-      `${msToTime(nph.playtime, false)} total playtime`,
-      `${msToTime(nph.walltime, false)} total walltime`,
+      `${msToTime(wastedTime, false)} total wasted time (${((wastedTime / playtime) * 100).toFixed(1)}%)`,
+      `${msToTime(inSeedPlaytime, false)} spent in overworlds that entered (${((inSeedPlaytime / playtime) * 100).toFixed(1)}%)`,
+      `${msToTime(playtime, false)} total playtime`,
+      `${msToTime(walltime, false)} total walltime`,
     ];
     return sections.join(' \u2756 ');
   }
@@ -595,10 +603,10 @@ export class MobibotClient {
     }, initial);
 
     // Overall Statistics
-    const totalWins = userData.data.statistics.season.wins.ranked;
+    const totalWins = userData.data.statistics.season.wins.ranked || 0;
     const totalMatches =
-      userData.data.statistics.season.wins.ranked +
-      userData.data.statistics.season.loses.ranked;
+      (userData.data.statistics.season.wins.ranked || 0) +
+      (userData.data.statistics.season.loses.ranked || 0);
     const totalWinrate = (totalWins / totalMatches) * 100;
 
     const sections = [

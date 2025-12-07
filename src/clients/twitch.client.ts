@@ -145,6 +145,7 @@ export class TwitchClient extends EventEmitter {
     message: string,
     color?: string,
   ): Promise<void> {
+    if (!message) return;
     const channelId = await this.fetchChannelId(channelName);
 
     let finalMessage: string = message;
