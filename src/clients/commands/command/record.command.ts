@@ -16,6 +16,7 @@ export class RecordCommand extends Command {
       if (!opp) {
         return '';
       }
+      return opp;
     }
     return null;
   }
@@ -40,7 +41,6 @@ export class RecordCommand extends Command {
     const season = this.getSeasonArgs(args) || undefined;
     const mcName = await this.getMcName(channel, message, tags);
     const oppName = await this.getOpp(args);
-    this.logger.debug(args);
 
     if (!mcName) return PLAYER_NOT_FOUND(channel);
     if (oppName === '') return PLAYER_NOT_FOUND(channel);
