@@ -5,7 +5,7 @@ import { PLAYER_NOT_FOUND } from '../util/defaults';
 
 export class WastedCommand extends Command {
   canHandle(message: string): boolean {
-    return this.getCommand(message) === BotCommand.SESSION;
+    return this.getCommand(message) === BotCommand.WASTED;
   }
 
   getHoursArg(args: string[]): number | null {
