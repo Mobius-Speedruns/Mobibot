@@ -70,7 +70,9 @@ export abstract class Command {
         );
       }
     } else if (this.isPlus(message)) {
-      const args = this.getArgs(message);
+      const lower = message.toLowerCase().trim();
+      const parts = lower.slice(1).trim().split(/\s+/);
+      const args = parts.slice(1);
       const username = tags.username || '';
 
       if (args.length > 0 && !INTEGER_REGEX.test(args[0])) {
