@@ -5,7 +5,7 @@ import { PLAYER_NOT_FOUND } from '../util/defaults';
 
 export class LastMatchCommand extends Command {
   canHandle(message: string): boolean {
-    return this.getCommand(message) === BotCommand.ELO;
+    return this.getCommand(message) === BotCommand.LASTMATCH;
   }
 
   async handle(
