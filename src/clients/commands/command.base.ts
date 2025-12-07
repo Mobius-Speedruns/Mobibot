@@ -3,17 +3,16 @@ import { MobibotClient } from '../mobibot.client';
 import { PostgresClient } from '../postgres.client';
 import { INTEGER_REGEX } from '../../types/app';
 import { CommandError } from './command.error';
+import { TwitchClient } from '../twitch.client';
+import { Logger as PinoLogger } from 'pino';
 
 export abstract class Command {
-  hasArguments: boolean = true;
-
   constructor(
     protected mobibotClient: MobibotClient,
     protected db: PostgresClient,
-    hasArguments?: boolean,
-  ) {
-    if (hasArguments) this.hasArguments = hasArguments;
-  }
+    protected twitch: TwitchClient,
+    protected logger: PinoLogger,
+  ) {}
 
   // Return true if this command can handle the raw incoming message (lowercased)
   abstract canHandle(message: string): boolean;
@@ -34,6 +33,8 @@ export abstract class Command {
   }
 
   getCommand(message: string): string {
+    // Dont handle non-commands
+    if (!this.isBang(message) && !this.isPlus(message)) return '';
     const lower = message.toLowerCase().trim();
     const parts = lower.slice(1).trim().split(/\s+/);
 
@@ -49,7 +50,7 @@ export abstract class Command {
     if (this.isPlus(message) && args.length > 0 && !INTEGER_REGEX.test(args[0]))
       args = args.slice(1);
 
-    return parts.slice(1);
+    return args;
   }
 
   async getMcName(
@@ -72,9 +73,7 @@ export abstract class Command {
       const args = this.getArgs(message);
       const username = tags.username || '';
 
-      if (!this.hasArguments) {
-        mcName = '';
-      } else if (args.length > 0 && !INTEGER_REGEX.test(args[0])) {
+      if (args.length > 0 && !INTEGER_REGEX.test(args[0])) {
         // First arg is a username override
         mcName = (await this.mobibotClient.getRealNickname(args[0])) || '';
       } else {

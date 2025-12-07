@@ -38,6 +38,7 @@ export class SessionCommand extends Command {
     const args = this.getArgs(message);
     const hours = this.parseIntArg(args[0]) || undefined;
     const hoursBetween = this.parseIntArg(args[1]) || undefined;
+    this.logger.debug(`hoursbetween ${hoursBetween}`);
 
     const mcName = await this.getMcName(channel, message, tags);
 

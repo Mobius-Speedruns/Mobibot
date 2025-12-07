@@ -5,7 +5,7 @@ import { PLAYER_NOT_FOUND } from '../util/defaults';
 
 export class ResetsCommand extends Command {
   canHandle(message: string): boolean {
-    return this.getCommand(message) === BotCommand.SESSION;
+    return this.getCommand(message) === BotCommand.RESETS;
   }
 
   getHoursArg(args: string[]): number | null {

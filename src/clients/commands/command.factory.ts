@@ -4,6 +4,8 @@ import { ChatTags } from '../../types/twitch';
 import { Command } from './command.base';
 import { MobibotClient } from '../mobibot.client';
 import { PostgresClient } from '../postgres.client';
+import { TwitchClient } from '../twitch.client';
+import { Logger as PinoLogger } from 'pino';
 
 export class CommandFactory {
   commands: Command[] = [];
@@ -11,6 +13,8 @@ export class CommandFactory {
   constructor(
     private mobibotClient?: MobibotClient,
     private db?: PostgresClient,
+    private twitch?: TwitchClient,
+    private logger?: PinoLogger,
   ) {
     // Attempt to auto-load all commands in the `command` folder.
     // This uses a synchronous require so it works whether running compiled JS or ts-node during development.
@@ -44,7 +48,12 @@ export class CommandFactory {
           try {
             // Instantiate with known constructor shape (mobibotClient, db, ...)
             // If the command has a different signature it should handle optional params.
-            const inst: Command = new Export(this.mobibotClient, this.db);
+            const inst: Command = new Export(
+              this.mobibotClient,
+              this.db,
+              this.twitch,
+              this.logger,
+            );
             this.commands.push(inst);
           } catch (err) {
             // ignore instantiation errors for now
