@@ -191,6 +191,7 @@ export class MobibotClient {
     // Use caches obtained via paceman
     // If @ was used, assume a twitch handle
     if (isAt) {
+      name = name.split('@')[1];
       username = await this.db.getTwitchFuzzy(name);
       // If no name found, attempt user search
       if (!username) username = await this.db.getUserFuzzy(name);
