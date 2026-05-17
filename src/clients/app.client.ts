@@ -8,7 +8,7 @@ import { MobibotClient } from './mobibot.client';
 import { PostgresClient } from './postgres.client';
 import { TwitchHelixApi } from './twitch/twitch.helix';
 import { TwitchWebsocket } from './twitch/twitch.websocket';
-import { TwitchEventNames } from 'src/events/event.types';
+import { TwitchEventNames } from 'src/eventemitter/event.types';
 import { ChatTags } from './twitch/twitch.types';
 
 export class AppClient {

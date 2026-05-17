@@ -3,8 +3,8 @@ import { config } from 'src/config';
 import { eventSubMessage, EventSubMessage } from './twitch.types';
 import { Logger } from 'pino';
 import { pinoLogger } from 'src/logger/logger.client';
-import { TypedEmitter } from 'src/events/event.emitter';
-import { TwitchEvents, TwitchEventNames } from 'src/events/event.types';
+import { TypedEmitter } from 'src/eventemitter/event.emitter';
+import { TwitchEvents, TwitchEventNames } from 'src/eventemitter/event.types';
 
 /**
  * Manages a persistent WebSocket connection to the Twitch EventSub API.
