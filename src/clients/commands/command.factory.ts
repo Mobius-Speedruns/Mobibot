@@ -1,15 +1,12 @@
 import * as fs from 'fs';
 import path from 'path';
 import { Logger as PinoLogger } from 'pino';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { pathToFileURL } from 'url';
 import { MobibotClient } from '../mobibot.client';
 import { PostgresClient } from '../postgres.client';
 import { TwitchHelixApi } from '../twitch/twitch.helix';
 import { TwitchWebsocket } from '../twitch/twitch.websocket';
 import { Command } from './command.base';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export class CommandFactory {
   commands: Command[] = [];

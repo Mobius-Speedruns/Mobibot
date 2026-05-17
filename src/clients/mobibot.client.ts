@@ -253,13 +253,17 @@ export class MobibotClient {
     const relativeTime = getRelativeTimeFromTimestamp(run.time);
     const relativeNethers = last100Runs.findIndex((r) => r.id === run.id) + 1;
 
+    function isSplitName(key: string): key is SplitName {
+      return Object.values(SplitName).includes(key as SplitName);
+    }
+
     const splits = Object.entries(run)
       .filter(
-        ([key, value]) =>
-          Object.values(SplitName).includes(key) && value != null,
+        (entry): entry is [SplitName, number] =>
+          isSplitName(entry[0]) && entry[1] != null,
       )
-      .sort(([, a], [, b]) => (a as number) - (b as number))
-      .map(([key, value]) => `${key}: ${msToTime(value as number)}`);
+      .sort(([, a], [, b]) => a - b)
+      .map(([key, value]) => `${key}: ${msToTime(value)}`);
 
     const sections = [
       `${appendInvisibleChars(name)} Last ${splitname}`,

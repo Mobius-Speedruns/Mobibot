@@ -36,14 +36,13 @@ export class AppClient {
       // Schedule once every 24 hours
       setInterval(() => {
         this.refreshUsers().catch((err) =>
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
           this.logger.error({ err }, 'refreshUsers failed'),
         );
       }, 86_400_000);
 
       // Refresh users on startup
       this.refreshUsers().catch((err) =>
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         this.logger.error({ err }, 'initial refreshUsers failed'),
       );
     } else {

@@ -49,7 +49,7 @@ export class SessionCommand extends Command {
 
     const response = await this.mobibotClient.lastsplit(
       mcName,
-      this.getSplitName(message),
+      this.getSplitName(message) || SplitName.FORTRESS,
     );
     return { channel, message: response };
   }

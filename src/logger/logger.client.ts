@@ -1,6 +1,5 @@
 import pino from 'pino';
 import { config } from 'src/config';
-import { Writable } from 'stream';
 
 export enum LOGGER_LEVEL {
   DEBUG = 'debug',
@@ -17,7 +16,7 @@ const prettyStream = pino.transport({
     translateTime: 'SYS:standard',
   },
   target: 'pino-pretty',
-}) as Writable;
+});
 
 export const pinoLogger = pino(
   {

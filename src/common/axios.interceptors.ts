@@ -17,7 +17,6 @@ export function applyInterceptors(api: AxiosInstance, logger: Logger): void {
       }
 
       if (error.response?.status === 404) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         logger.warn({ data: error.response.data }, 'Resource not found');
         throw new PlayerNotFound();
       }

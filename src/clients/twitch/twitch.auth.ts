@@ -90,7 +90,6 @@ export class TwitchAuthClient {
         this.logger.error(
           {
             status: err.response?.status,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             data: err.response?.data,
           },
           'Token refresh failed',
