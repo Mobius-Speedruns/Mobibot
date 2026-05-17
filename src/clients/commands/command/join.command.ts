@@ -1,10 +1,10 @@
-import { ChatTags, SendMessage } from '../../../types/twitch';
+import { ChatTags, SendMessage } from 'src/clients/twitch/twitch.types';
 import { Command } from '../command.base';
 import { CommandError } from '../command.error';
 
 export class JoinCommand extends Command {
   canHandle(message: string): boolean {
-    return this.getCommand(message) === 'join';
+    return (this.getCommand(message) as string) === 'join';
   }
 
   async handle(
@@ -46,7 +46,7 @@ export class JoinCommand extends Command {
     // Add channelName
     try {
       await this.db.createChannel(channelName, username, true); // Create the channelName
-      await this.twitch.subscribe(channelName); // Subscribe to channelName's chat
+      await this.twitch.subscribe(channelName, this.events.sessionId); // Subscribe to channelName's chat
     } catch (err: unknown) {
       if (err instanceof Error) {
         this.logger.error(`Failed to subscribe ${channelName}: ${err.message}`);

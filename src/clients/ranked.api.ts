@@ -1,56 +1,51 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
-import { type Logger as PinoLogger } from 'pino';
-
-import { Service } from '../types/app';
+import { Logger } from 'pino';
+import { applyInterceptors } from 'src/common/axios.interceptors';
+import { PlayerNotFound } from 'src/common/errors';
+import { pinoLogger } from 'src/logger/logger.client';
 import {
-  BOUNDS,
   ErrorResponse,
-  GetUserDataResponse,
-  GetUserDataResponseSchema,
+  PLAYER_NOT_FOUND_MESSAGES,
+  BOUNDS,
   LABELS,
-  LeaderboardResponse,
-  LeaderboardResponseSchema,
   MatchesResponse,
   MatchesResponseSchema,
-  PLAYER_NOT_FOUND_MESSAGES,
+  LeaderboardResponse,
+  LeaderboardResponseSchema,
   RANK_COLOR,
+  GetUserDataResponse,
+  GetUserDataResponseSchema,
   VSResponse,
   VSResponseSchema,
-} from '../types/ranked';
+} from 'src/types/ranked';
 
 export class RankedClient {
   private api: AxiosInstance;
-  private logger: PinoLogger;
+  private logger: Logger;
 
-  constructor(baseURL: string, logger: PinoLogger) {
+  constructor(baseURL: string) {
     this.api = axios.create({ baseURL, timeout: 30000 });
-    this.logger = logger.child({ Service: Service.RANKED });
+    this.logger = pinoLogger.child({ Service: 'Ranked' });
 
-    // Intercept player not found errors
+    applyInterceptors(this.api, this.logger);
+
+    // Ranked doesnt return 404 for bad player names - instead returns 400
     this.api.interceptors.response.use(
-      (response) => {
-        return response;
-      },
+      (response) => response,
       (error: unknown) => {
-        if (error instanceof AxiosError) {
-          const responseData = error.response?.data as
-            | ErrorResponse
-            | undefined;
+        if (error instanceof AxiosError && error.response?.status === 404) {
+          const responseData = error.response.data as ErrorResponse | undefined;
 
           if (
-            responseData &&
-            responseData.status === 'error' &&
+            responseData?.status === 'error' &&
             PLAYER_NOT_FOUND_MESSAGES.includes(responseData.data)
           ) {
-            this.logger.error(responseData.data);
-            throw new Error('Player not found.');
+            this.logger.warn({ data: responseData }, 'Player not found');
+            throw new PlayerNotFound();
           }
-
-          this.logger.error(error);
-          throw error;
-        } else {
-          throw error;
         }
+
+        throw error;
       },
     );
   }

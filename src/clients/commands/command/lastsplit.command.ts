@@ -1,8 +1,8 @@
-import { BotCommand } from '../../../types/app';
-import { SplitName } from '../../../types/paceman';
-import { ChatTags, SendMessage } from '../../../types/twitch';
+import { BotCommand } from 'src/types/app';
+import { ChatTags, SendMessage } from 'src/clients/twitch/twitch.types';
 import { Command } from '../command.base';
 import { PLAYER_NOT_FOUND } from '../util/defaults';
+import { SplitName } from 'src/types/paceman';
 
 export class SessionCommand extends Command {
   canHandle(message: string): boolean {
@@ -19,8 +19,11 @@ export class SessionCommand extends Command {
     ].includes(this.getCommand(message) as BotCommand);
   }
 
-  getSplitName(message: string): SplitName {
-    const map = {
+  getSplitName(message: string): SplitName | null {
+    const command = this.getCommand(message);
+    if (!command) return null;
+
+    const map: Record<string, SplitName> = {
       [BotCommand.LASTENTER]: SplitName.NETHER,
       [BotCommand.LASTNETHER]: SplitName.NETHER,
       [BotCommand.LASTBASTION]: SplitName.BASTION,
@@ -30,8 +33,9 @@ export class SessionCommand extends Command {
       [BotCommand.LASTEND]: SplitName.END,
       [BotCommand.LASTFINISH]: SplitName.FINISH,
       [BotCommand.LASTPACE]: SplitName.FORTRESS,
-    } as Record<string, SplitName>;
-    return map[this.getCommand(message)];
+    };
+
+    return map[command] ?? null;
   }
 
   async handle(

@@ -1,4 +1,4 @@
-import { SendMessage } from '../../../types/twitch';
+import { SendMessage } from 'src/clients/twitch/twitch.types';
 
 export const PLAYER_NOT_FOUND = (channel: string): SendMessage => {
   return {

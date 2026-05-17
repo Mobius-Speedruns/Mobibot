@@ -1,31 +1,35 @@
-import { Logger as PinoLogger } from 'pino';
-
-import { INTEGER_REGEX, Service } from '../types/app';
-import { ChatTags } from '../types/twitch';
-import { parseError } from '../util/parseError';
+import { Logger } from 'pino';
+import { PlayerNotFound, ClientTimeout } from 'src/common/errors';
+import { pinoLogger } from 'src/logger/logger.client';
+import { Service } from 'src/types/app';
+import { CommandError } from './commands/command.error';
+import { CommandFactory } from './commands/command.factory';
 import { MobibotClient } from './mobibot.client';
 import { PostgresClient } from './postgres.client';
-import { TwitchClient } from './twitch.client';
-import { CommandFactory } from './commands/command.factory';
-import { CommandError } from './commands/command.error';
+import { TwitchHelixApi } from './twitch/twitch.helix';
+import { TwitchWebsocket } from './twitch/twitch.websocket';
+import { TwitchEventNames } from 'src/events/event.types';
+import { ChatTags } from './twitch/twitch.types';
 
 export class AppClient {
   private commandFactory: CommandFactory;
-  private client: TwitchClient;
   private db: PostgresClient;
-  private logger: PinoLogger;
+  private events: TwitchWebsocket;
+  private logger: Logger;
   private mobibotClient: MobibotClient;
+  private twitch: TwitchHelixApi;
 
   constructor(
     mobibotClient: MobibotClient,
-    client: TwitchClient,
+    twitch: TwitchHelixApi,
+    events: TwitchWebsocket,
     db: PostgresClient,
-    logger: PinoLogger,
   ) {
     this.db = db;
     this.mobibotClient = mobibotClient;
-    this.client = client;
-    this.logger = logger.child({ Service: Service.APP });
+    this.twitch = twitch;
+    this.events = events;
+    this.logger = pinoLogger.child({ Service: Service.APP });
 
     // Fetch users from paceman in prod.
     if (process.env.NODE_ENV === 'production') {
@@ -46,71 +50,13 @@ export class AppClient {
       this.logger.info('Skipping user refresh job (not in production)');
     }
 
-    this.commandFactory = new CommandFactory(mobibotClient, db, client, logger);
-  }
-
-  public async shutdown() {
-    this.logger.info('Shutting down bot, unsubscribing from all channels...');
-
-    const channels = await this.db.listSubscribedChannels();
-
-    // unsubscribe from each channel
-    for (const channel of channels) {
-      try {
-        await this.client.unsubscribe(channel);
-        this.logger.info(`Unsubscribed from channel ${channel}`);
-      } catch (err: unknown) {
-        this.logger.error(err, `Failed to unsubscribe from channel ${channel}`);
-      }
-    }
-
-    await this.db.close();
-    this.logger.info('Database connection closed');
-  }
-
-  public async start() {
-    await this.db.init();
-    // Add HQ channel if not already in channels
-    await this.db.createChannel(
-      process.env.HQ_TWITCH!,
-      process.env.HQ_MC,
-      true,
+    this.commandFactory = new CommandFactory(
+      mobibotClient,
+      db,
+      twitch,
+      events,
+      this.logger,
     );
-
-    await this.client.connect();
-
-    const channels = await this.db.listSubscribedChannels();
-
-    await this.connectToChannels(channels);
-
-    this.client.onChatMessage((channel, tags, message) => {
-      this.handleCommand(channel, message, tags).catch((err: unknown) => {
-        this.logger.error(err, 'Error handling message');
-      });
-    });
-
-    this.logger.info(`Mobibot connected to channels: ${channels.join(', ')}`);
-
-    return new Promise<void>((resolve, reject) => {
-      // Set up error handling to reject the promise (triggers restart)
-      this.client.on('error', (error: unknown) => {
-        const msg = parseError(error);
-        this.logger.error(msg);
-        reject(Error(msg));
-      });
-    });
-  }
-
-  private async connectToChannels(channels: string[]): Promise<void> {
-    // Subscribe to each channel
-    for (const channel of channels) {
-      try {
-        await this.client.subscribe(channel);
-      } catch (err) {
-        this.logger.error(`Failed to subscribe to channel ${channel}`);
-        this.logger.error(err);
-      }
-    }
   }
 
   // -----------------------------
@@ -126,7 +72,7 @@ export class AppClient {
       if (!command) return;
       const response = await command.handle(channel, message, tags);
       if (response)
-        await this.client.send(
+        await this.twitch.send(
           response.channel,
           response.message,
           response.color,
@@ -134,12 +80,85 @@ export class AppClient {
     } catch (err: unknown) {
       if (err instanceof CommandError) {
         // Send the user-facing error message to the channel
-        await this.client.send(channel, err.userMessage);
+        await this.twitch.send(channel, err.userMessage);
+        return;
+      }
+
+      if (err instanceof PlayerNotFound) {
+        await this.twitch.send(channel, 'Player not found.');
+        return;
+      }
+
+      if (err instanceof ClientTimeout) {
+        await this.twitch.send(
+          channel,
+          'Paceman/Ranked timed out! Please try again later.',
+        );
         return;
       }
 
       // Log unexpected errors but do not forward them to chat
       this.logger.error(err, 'Error executing command');
+    }
+  }
+
+  public async shutdown() {
+    this.logger.info('Shutting down bot, unsubscribing from all channels...');
+
+    const channels = await this.db.listSubscribedChannels();
+
+    // unsubscribe from each channel
+    for (const channel of channels) {
+      try {
+        await this.twitch.unsubscribe(channel);
+        this.logger.info(`Unsubscribed from channel ${channel}`);
+      } catch (err: unknown) {
+        this.logger.error(err, `Failed to unsubscribe from channel ${channel}`);
+      }
+    }
+
+    await this.db.close();
+    this.logger.info('Database connection closed');
+  }
+
+  public async start() {
+    await this.db.init();
+    await this.commandFactory.init();
+    // Add HQ channel if not already in channels
+    await this.db.createChannel(
+      process.env.HQ_TWITCH!,
+      process.env.HQ_MC,
+      true,
+    );
+
+    const channels = await this.db.listSubscribedChannels();
+
+    await this.connectToChannels(channels);
+
+    this.events.on(TwitchEventNames.CHAT, (message) => {
+      const event = message.payload.event;
+
+      this.logger.debug(`incoming event: ${JSON.stringify(event)}`);
+
+      this.handleCommand(event.broadcaster_user_login, event.message.text, {
+        username: event.chatter_user_login,
+      }).catch((err: unknown) => {
+        this.logger.error(err, 'Error handling message');
+      });
+    });
+
+    this.logger.info(`Mobibot connected to channels: ${channels.join(', ')}`);
+  }
+
+  private async connectToChannels(channels: string[]): Promise<void> {
+    // Subscribe to each channel
+    for (const channel of channels) {
+      try {
+        await this.twitch.subscribe(channel, this.events.sessionId);
+      } catch (err) {
+        this.logger.error(`Failed to subscribe to channel ${channel}`);
+        this.logger.error(err);
+      }
     }
   }
 

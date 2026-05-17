@@ -1,6 +1,5 @@
-import z, { optional } from 'zod';
-
-import { TwitchColor } from './twitch';
+import { TwitchColor } from 'src/clients/twitch/twitch.types';
+import z from 'zod';
 
 export const BOUNDS = [
   400,

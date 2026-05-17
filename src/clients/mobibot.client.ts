@@ -1,29 +1,27 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import axios from 'axios';
-import { Logger as PinoLogger } from 'pino';
-
-import { Seedwave, Service } from '../types/app';
-import { Day, MAX_HOUR, Run, SplitName, User } from '../types/paceman';
-import { MatchType, NETHER_TYPE, OVERWORLD_TYPE } from '../types/ranked';
-import { appendInvisibleChars } from '../util/appendInvisibleChars';
-import { capitalizeWords } from '../util/capitalizeWords';
-import { getFlag } from '../util/getFlag';
-import { getHoursSinceTime } from '../util/getHoursSinceTime';
+import { Logger } from 'pino';
+import { pinoLogger } from 'src/logger/logger.client';
+import { Service, Seedwave } from 'src/types/app';
+import { User, SplitName, MAX_HOUR, Day, Run } from 'src/types/paceman';
+import { NETHER_TYPE, OVERWORLD_TYPE, MatchType } from 'src/types/ranked';
+import { appendInvisibleChars } from 'src/util/appendInvisibleChars';
+import { capitalizeWords } from 'src/util/capitalizeWords';
+import { getFlag } from 'src/util/getFlag';
+import { getHoursSinceTime } from 'src/util/getHoursSinceTime';
 import {
-  getRelativeTime,
   getRelativeTimeFromTimestamp,
-} from '../util/getRelativeTime';
-import { handleNotFound } from '../util/handleNotFound';
-import { isTodayUTC } from '../util/isTodayUTC';
-import { msToTime } from '../util/msToTime';
-import { msToYMDH } from '../util/msToYMDH';
+  getRelativeTime,
+} from 'src/util/getRelativeTime';
+import { isTodayUTC } from 'src/util/isTodayUTC';
+import { msToTime } from 'src/util/msToTime';
+import { msToYMDH } from 'src/util/msToYMDH';
 import { PacemanClient } from './paceman.api';
 import { PostgresClient } from './postgres.client';
 import { RankedClient } from './ranked.api';
 
 export class MobibotClient {
   private db: PostgresClient;
-  private logger: PinoLogger;
+  private logger: Logger;
   private paceman: PacemanClient;
   private ranked: RankedClient;
 
@@ -31,25 +29,11 @@ export class MobibotClient {
     paceman: PacemanClient,
     ranked: RankedClient,
     db: PostgresClient,
-    logger: PinoLogger,
   ) {
     this.paceman = paceman;
     this.ranked = ranked;
     this.db = db;
-    this.logger = logger.child({ Service: Service.MOBIBOT });
-
-    // Error handling.
-    this.session = handleNotFound(this.session);
-    this.lastpace = handleNotFound(this.lastpace);
-    this.lastsplit = handleNotFound(this.lastsplit);
-    this.pb = handleNotFound(this.pb);
-    this.resets = handleNotFound(this.resets);
-    this.elo = handleNotFound(this.elo);
-    this.lastmatch = handleNotFound(this.lastmatch);
-    this.today = handleNotFound(this.today);
-    this.record = handleNotFound(this.record);
-    this.winrate = handleNotFound(this.winrate);
-    this.average = handleNotFound(this.average);
+    this.logger = pinoLogger.child({ Service: Service.MOBIBOT });
   }
 
   async average(name: string, season?: number): Promise<string> {
@@ -209,7 +193,7 @@ export class MobibotClient {
         if (user.data.nickname) {
           username = user.data.nickname;
           // Update the cache
-          this.db.upsertUser(username);
+          await this.db.upsertUser(username);
         }
       } catch {
         return null;
@@ -272,7 +256,7 @@ export class MobibotClient {
     const splits = Object.entries(run)
       .filter(
         ([key, value]) =>
-          (Object.values(SplitName) as string[]).includes(key) && value != null,
+          Object.values(SplitName).includes(key) && value != null,
       )
       .sort(([, a], [, b]) => (a as number) - (b as number))
       .map(([key, value]) => `${key}: ${msToTime(value as number)}`);
@@ -525,7 +509,7 @@ export class MobibotClient {
     // OW time from pace
     const inSeedPlaytime = seeds.reduce((sum, seed) => {
       if (seed.updatedTime === null || !seed.nether) return sum;
-      return (sum += seed.nether);
+      return sum + seed.nether;
     }, 0);
 
     // Total time in-between seeds

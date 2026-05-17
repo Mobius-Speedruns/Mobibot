@@ -1,5 +1,5 @@
-import { BotCommand } from '../../../types/app';
-import { ChatTags, SendMessage } from '../../../types/twitch';
+import { BotCommand } from 'src/types/app';
+import { ChatTags, SendMessage } from 'src/clients/twitch/twitch.types';
 import { Command } from '../command.base';
 import { PLAYER_NOT_FOUND } from '../util/defaults';
 
