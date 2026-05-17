@@ -1,10 +1,10 @@
-import { ChatTags, SendMessage } from '../../../types/twitch';
+import { ChatTags, SendMessage } from 'src/clients/twitch/twitch.types';
 import { Command } from '../command.base';
 import { CommandError } from '../command.error';
 
 export class UnlinkCommand extends Command {
   canHandle(message: string): boolean {
-    return this.getCommand(message) === 'unlink';
+    return (this.getCommand(message) as string) === 'unlink';
   }
 
   async handle(

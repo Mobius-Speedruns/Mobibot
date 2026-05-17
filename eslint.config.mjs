@@ -1,36 +1,27 @@
-import eslint from '@eslint/js';
-import tselint from 'typescript-eslint';
-import perfectionist from 'eslint-plugin-perfectionist';
-import eslintPluginPrettierRecommend from 'eslint-plugin-prettier/recommended';
-import globals from 'globals';
+import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
 
-export default tselint.config(
+export default tseslint.config(
   {
-    ignores: ['eslint.config.mjs', 'src/types/**'],
+    ignores: ['dist/**', 'node_modules/**', 'eslint.config.mjs'],
   },
-  perfectionist.configs['recommended-alphabetical'],
-  eslint.configs.recommended,
-  ...tselint.configs.recommendedTypeChecked,
-  eslintPluginPrettierRecommend,
-  {
+
+  js.configs.recommended,
+
+  ...tseslint.configs.recommendedTypeChecked.map((config) => ({
+    ...config,
     languageOptions: {
-      globals: {
-        ...globals.node,
-      },
-      ecmaVersion: 5,
-      sourceType: 'module',
+      ...config.languageOptions,
       parserOptions: {
-        projectService: true,
+        project: './tsconfig.eslint.json',
         tsconfigRootDir: import.meta.dirname,
       },
     },
-  },
+  })),
+
   {
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/no-floating-promises': 'warn',
-      '@typescript-eslint/no-unsafe-argument': 'warn',
-      'perfectionist/sort-enums': 'off',
+      '@typescript-eslint/no-floating-promises': 'error',
     },
   },
 );

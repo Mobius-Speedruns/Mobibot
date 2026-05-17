@@ -1,9 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import { Pool } from 'pg';
-import { Logger as PinoLogger } from 'pino';
 
-import { Service } from '../types/app';
+import { pinoLogger } from 'src/logger/logger.client';
+import { Logger } from 'pino';
 import {
   ChannelRow,
   ChannelRowSchema,
@@ -11,16 +11,15 @@ import {
   TwitchRowSchema,
   UserRow,
   UserRowSchema,
-} from '../types/postgres';
-import { parseError } from '../util/parseError';
+} from 'src/types/postgres';
 
 export class PostgresClient {
-  private logger: PinoLogger;
+  private logger: Logger;
   private minSimilarityScore: number = 0.3;
   private pool: Pool;
 
-  constructor(connectionString: string, logger: PinoLogger) {
-    this.logger = logger.child({ Service: Service.DB });
+  constructor(connectionString: string) {
+    this.logger = pinoLogger.child({ Service: 'Postgres' });
     this.pool = new Pool({
       connectionString,
     });
@@ -152,10 +151,7 @@ export class PostgresClient {
         await this.recordMigration(file);
         this.logger.info(`Migration ${file} completed successfully`);
       } catch (error: unknown) {
-        this.logger.error(
-          { msg: parseError(error) },
-          `Migration ${file} failed:`,
-        );
+        this.logger.error({ msg: error }, `Migration ${file} failed:`);
         throw error;
       }
     }

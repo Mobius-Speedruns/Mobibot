@@ -16,4 +16,4 @@ RUN npm run build
 EXPOSE 3000
 
 # Default command
-CMD ["node", "dist/app.js"]
+CMD ["node", "dist/index.js"]

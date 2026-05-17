@@ -6,6 +6,10 @@ export type SendMessage = {
   color?: TwitchColor;
 };
 
+export interface ChatTags {
+  username?: string;
+}
+
 export enum TwitchColor {
   Blue = 'blue',
   BlueViolet = 'blue_violet',
@@ -153,22 +157,9 @@ export const eventSubMessage = z.union([
   sessionKeepAlive,
   sessionReconnectMessage,
 ]);
-export type ChatMessageHandler = (
-  channel: string,
-  tags: ChatTags,
-  message: string,
-) => void;
-
-export interface ChatTags {
-  username?: string;
-}
 
 export type EventSubMessage = z.infer<typeof eventSubMessage>;
-
-export const RECOVERABLE_CODES = [
-  1006, // Abnormal closure (network issues)
-  4003, // Connection unused (Twitch-specific)
-];
+export type NotificationMessage = z.infer<typeof notificationMessage>;
 
 export const twitchColorResponseSchema = z.object({
   data: z.array(

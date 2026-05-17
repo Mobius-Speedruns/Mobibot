@@ -1,16 +1,18 @@
-import { ChatTags, SendMessage } from '../../types/twitch';
-import { MobibotClient } from '../mobibot.client';
-import { PostgresClient } from '../postgres.client';
-import { INTEGER_REGEX } from '../../types/app';
-import { CommandError } from './command.error';
-import { TwitchClient } from '../twitch.client';
 import { Logger as PinoLogger } from 'pino';
+import { MobibotClient } from '../mobibot.client';
+import { BotCommand, INTEGER_REGEX } from 'src/types/app';
+import { PostgresClient } from '../postgres.client';
+import { TwitchHelixApi } from '../twitch/twitch.helix';
+import { TwitchWebsocket } from '../twitch/twitch.websocket';
+import { CommandError } from './command.error';
+import { ChatTags, SendMessage } from '../twitch/twitch.types';
 
 export abstract class Command {
   constructor(
     protected mobibotClient: MobibotClient,
     protected db: PostgresClient,
-    protected twitch: TwitchClient,
+    protected twitch: TwitchHelixApi,
+    protected events: TwitchWebsocket,
     protected logger: PinoLogger,
   ) {}
 
@@ -32,13 +34,13 @@ export abstract class Command {
     return message.startsWith('+');
   }
 
-  getCommand(message: string): string {
+  getCommand(message: string): BotCommand | null {
     // Dont handle non-commands
-    if (!this.isBang(message) && !this.isPlus(message)) return '';
+    if (!this.isBang(message) && !this.isPlus(message)) return null;
     const lower = message.toLowerCase().trim();
     const parts = lower.slice(1).trim().split(/\s+/);
 
-    return parts[0];
+    return parts[0] as BotCommand;
   }
 
   getArgs(message: string): string[] {
@@ -79,7 +81,6 @@ export abstract class Command {
         // First arg is a username override
         mcName = (await this.mobibotClient.getRealNickname(args[0])) || '';
       } else {
-        mcName = '';
         // Use subscribed username
         const subscribedMcName = await this.db.getMcName(username);
 

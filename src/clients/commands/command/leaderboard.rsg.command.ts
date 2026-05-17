@@ -1,7 +1,7 @@
-import { BotCommand } from '../../../types/app';
-import { Day } from '../../../types/paceman';
-import { SendMessage } from '../../../types/twitch';
+import { BotCommand } from 'src/types/app';
+import { SendMessage } from 'src/clients/twitch/twitch.types';
 import { Command } from '../command.base';
+import { Day } from 'src/types/paceman';
 
 export class AllTimeCommand extends Command {
   canHandle(message: string): boolean {

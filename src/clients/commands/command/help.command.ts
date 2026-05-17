@@ -1,5 +1,5 @@
-import { BotCommand } from '../../../types/app';
-import { SendMessage } from '../../../types/twitch';
+import { BotCommand } from 'src/types/app';
+import { SendMessage } from 'src/clients/twitch/twitch.types';
 import { Command } from '../command.base';
 
 export class AllTimeCommand extends Command {
@@ -11,6 +11,7 @@ export class AllTimeCommand extends Command {
     ].includes(this.getCommand(message) as BotCommand);
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async handle(channel: string): Promise<SendMessage | null> {
     return {
       channel,

@@ -1,11 +1,15 @@
 import * as fs from 'fs';
-import * as path from 'path';
-import { ChatTags } from '../../types/twitch';
-import { Command } from './command.base';
+import path from 'path';
+import { Logger as PinoLogger } from 'pino';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { MobibotClient } from '../mobibot.client';
 import { PostgresClient } from '../postgres.client';
-import { TwitchClient } from '../twitch.client';
-import { Logger as PinoLogger } from 'pino';
+import { TwitchHelixApi } from '../twitch/twitch.helix';
+import { TwitchWebsocket } from '../twitch/twitch.websocket';
+import { Command } from './command.base';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export class CommandFactory {
   commands: Command[] = [];
@@ -13,21 +17,23 @@ export class CommandFactory {
   constructor(
     private mobibotClient?: MobibotClient,
     private db?: PostgresClient,
-    private twitch?: TwitchClient,
+    private twitch?: TwitchHelixApi,
+    private events?: TwitchWebsocket,
     private logger?: PinoLogger,
-  ) {
-    // Attempt to auto-load all commands in the `command` folder.
-    // This uses a synchronous require so it works whether running compiled JS or ts-node during development.
-    try {
-      this.loadCommands();
-    } catch {
-      // Do nothing
-    }
+  ) {}
+
+  async init(): Promise<void> {
+    await this.loadCommands();
   }
 
-  private loadCommands() {
+  private async loadCommands(): Promise<void> {
     const dir = path.join(__dirname, 'command');
-    if (!fs.existsSync(dir)) return;
+    this.logger?.info(`Loading commands from: ${dir}`);
+
+    if (!fs.existsSync(dir)) {
+      this.logger?.warn(`Command directory not found: ${dir}`);
+      return;
+    }
 
     const files = fs
       .readdirSync(dir)
@@ -38,36 +44,32 @@ export class CommandFactory {
     for (const file of files) {
       try {
         const full = path.join(dir, file);
-        // Use require so this works both for ts-node (.ts) and compiled (.js)
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const mod = require(full);
+        const mod = (await import(pathToFileURL(full).href)) as Record<
+          string,
+          new (...args: unknown[]) => Command
+        >;
 
         for (const key of Object.keys(mod)) {
-          const Export = (mod as any)[key];
-
+          const Export = mod[key];
           try {
-            // Instantiate with known constructor shape (mobibotClient, db, ...)
-            // If the command has a different signature it should handle optional params.
-            const inst: Command = new Export(
+            const inst = new Export(
               this.mobibotClient,
               this.db,
               this.twitch,
+              this.events,
               this.logger,
             );
             this.commands.push(inst);
           } catch (err) {
-            // ignore instantiation errors for now
+            this.logger?.warn(
+              `Failed to instantiate command ${key}: ${String(err)}`,
+            );
           }
         }
       } catch (err) {
-        // ignore per-file load errors
+        this.logger?.warn(`Failed to load file ${file}: ${String(err)}`);
       }
     }
-  }
-
-  getPermissions(channel: string, message: string, tags: ChatTags): boolean {
-    // TODO: check permissions on the channel
-    return true;
   }
 
   getCommand(message: string): Command | undefined {

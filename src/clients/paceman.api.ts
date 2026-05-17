@@ -1,12 +1,13 @@
 // src/clients/PacemanClient.ts
-import axios, { AxiosError, AxiosInstance } from 'axios';
-import { type Logger as PinoLogger } from 'pino';
-
-import { Service } from '../types/app';
+import axios, { AxiosInstance } from 'axios';
+import { type Logger } from 'pino';
+import { applyInterceptors } from 'src/common/axios.interceptors';
+import { pinoLogger } from 'src/logger/logger.client';
 import {
-  Day,
+  User,
   LastestRun,
   latestRunSchema,
+  Day,
   Leaderboard,
   NPH,
   nphSchema,
@@ -14,33 +15,22 @@ import {
   pbSchema,
   RecentRuns,
   recentRunSchema,
-  Session,
   sessionSchema,
-  User,
   World,
   worldSchema,
-} from '../types/paceman';
+  Session,
+} from 'src/types/paceman';
 
 export class PacemanClient {
   private api: AxiosInstance;
-  private logger: PinoLogger;
+  private logger: Logger;
 
-  constructor(baseURL: string, logger: PinoLogger) {
+  constructor(baseURL: string) {
     this.api = axios.create({ baseURL, timeout: 30000 });
-    this.logger = logger.child({ Service: Service.PACEMAN });
+    this.logger = pinoLogger.child({ Service: 'Paceman' });
 
     // Intercept player not found errors
-    this.api.interceptors.response.use(
-      (response) => response,
-      (error: unknown) => {
-        if (error instanceof AxiosError) {
-          if (error.response && error.response.status === 404) {
-            throw new Error('Player not found.');
-          }
-        }
-        throw error;
-      },
-    );
+    applyInterceptors(this.api, this.logger);
   }
 
   async getAllUsers(): Promise<User[]> {
