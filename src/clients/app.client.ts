@@ -121,8 +121,8 @@ export class AppClient {
   }
 
   public async start() {
+    this.commandFactory.init();
     await this.db.init();
-    await this.commandFactory.init();
     // Add HQ channel if not already in channels
     await this.db.createChannel(
       process.env.HQ_TWITCH!,

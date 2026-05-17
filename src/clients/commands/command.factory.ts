@@ -1,7 +1,6 @@
 import * as fs from 'fs';
 import path from 'path';
 import { Logger as PinoLogger } from 'pino';
-import { pathToFileURL } from 'url';
 import { MobibotClient } from '../mobibot.client';
 import { PostgresClient } from '../postgres.client';
 import { TwitchHelixApi } from '../twitch/twitch.helix';
@@ -19,11 +18,11 @@ export class CommandFactory {
     private logger?: PinoLogger,
   ) {}
 
-  async init(): Promise<void> {
-    await this.loadCommands();
+  init(): void {
+    this.loadCommands();
   }
 
-  private async loadCommands(): Promise<void> {
+  private loadCommands(): void {
     const dir = path.join(__dirname, 'command');
     this.logger?.info(`Loading commands from: ${dir}`);
 
@@ -41,10 +40,8 @@ export class CommandFactory {
     for (const file of files) {
       try {
         const full = path.join(dir, file);
-        const mod = (await import(pathToFileURL(full).href)) as Record<
-          string,
-          new (...args: unknown[]) => Command
-        >;
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const mod = require(full) as Record<string, new (...args: unknown[]) => Command>;
 
         for (const key of Object.keys(mod)) {
           const Export = mod[key];
