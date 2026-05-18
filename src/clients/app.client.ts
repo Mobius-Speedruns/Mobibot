@@ -129,8 +129,9 @@ export class AppClient {
       process.env.HQ_MC,
       true,
     );
-
     const channels = await this.db.listSubscribedChannels();
+    await this.connectToChannels(channels) // Initial connection
+
 
     this.events.on(TwitchEventNames.CONNECTED, () => {
       this.connectToChannels(channels).catch((err: unknown) => {
