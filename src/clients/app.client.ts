@@ -132,7 +132,11 @@ export class AppClient {
 
     const channels = await this.db.listSubscribedChannels();
 
-    await this.connectToChannels(channels);
+    this.events.on(TwitchEventNames.CONNECTED, () => {
+      this.connectToChannels(channels).catch((err: unknown) => {
+        this.logger.error(err, 'Error resubscribing to channels after reconnect');
+      });
+    });
 
     this.events.on(TwitchEventNames.CHAT, (message) => {
       const event = message.payload.event;
