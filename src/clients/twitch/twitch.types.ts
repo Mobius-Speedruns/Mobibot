@@ -103,7 +103,7 @@ export const sessionWelcomeEventPayload = z.object({
   session: z.object({
     connected_at: z.string(),
     id: z.string(),
-    keepalive_timeout_seconds: z.number(),
+    keepalive_timeout_seconds: z.number().nullable(),
     status: z.string(),
   }),
 });
@@ -138,7 +138,7 @@ export const sessionReconnectMessage = z.object({
     session: z.object({
       connected_at: z.string(),
       id: z.string(),
-      keepalive_timeout_seconds: z.number(),
+      keepalive_timeout_seconds: z.number().nullable()  ,
       reconnect_url: z.string(),
       status: z.string(),
     }),
